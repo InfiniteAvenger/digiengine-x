@@ -84,101 +84,114 @@ Sprite load(const char* text) {
     return s;
 }
 
-// Home menu, one 9x9 frame per slot, drawn as a one-color mask:
+// Home menu, one 9x9 frame per slot, drawn with an outline by draw_icon:
 // status, feed, train, quest, clean (broom), lights, garden, bag, cryo.
 constexpr const char* kMenu = R"(size 9 9
 palette
-x ffffff
+w f4f4f4
+g 94b0c2
+s 566c86
+r e04050
+m b13e53
+o ef7d57
+y ffcd75
+a d9a066
+h 38b764
+e 257179
+c 73eff7
+n 8b5a2b
+l b8865b
+d 5d3a1f
 frame
-.......x.
-.......x.
-....x..x.
-....x..x.
-.x..x..x.
-.x..x..x.
-.x..x..x.
-.x..x..x.
-xxxxxxxxx
+.......hh
+.......he
+....yy.he
+....ya.he
+.oo.ya.he
+.om.ya.he
+.om.ya.he
+.........
+sssssssss
 frame
-....xxxx.
-...xxxxxx
-...xxxxxx
-...xxxxxx
-....xxxx.
-...xx....
-..xx.....
-xxx......
-.x.......
+....n.hh.
+....nhh..
+.rrr.rrr.
+rrwrrrrrm
+rwrrrrrrm
+rrrrrrrrm
+rrrrrrrmm
+.rrrrrmm.
+..mm.mm..
 frame
 .........
-x.......x
-xx.....xx
-xx.....xx
-xxxxxxxxx
-xx.....xx
-xx.....xx
-x.......x
+.g.....g.
+gs.....gs
+gs.....gs
+gswwwwwgs
+gs.....gs
+gs.....gs
+.s.....s.
 .........
 frame
-.......xx
-......xxx
-.....xxx.
-....xxx..
-.x.xxx...
-..xxx....
-..xx.....
-.x..x....
-x........
+.......wg
+......wwg
+.....wwg.
+....wwg..
+.y.wwg...
+..ywg....
+..ny.....
+.n..y....
+y........
 frame
-........x
-.......x.
-......x..
-.....x...
-..xxx....
-.xxxx....
-xxxxx....
-x.x.x....
-.x.x.....
+........n
+.......n.
+......n..
+.....n...
+..rrr....
+.yyya....
+yyyaa....
+y.y.a....
+.y.a.....
 frame
-...xxx...
-..xxxxx..
-.xxxxxxx.
-.xxxxxxx.
-..xxxxx..
-...xxx...
-.........
-...xxx...
-....x....
+...yyy...
+..ywyyy..
+.ywyyyya.
+.yyyyyya.
+.yyyyyaa.
+..yyyaa..
+...ggg...
+...sss...
+....s....
 frame
-.........
-.xx...xx.
-xxxx.xxxx
-.xxx.xxx.
-...x.x...
-....x....
-....x....
-.xxxxxxx.
-xxxxxxxxx
+......hh.
+.hh..hhhh
+hhhh.hhe.
+.ehh.e...
+...ee....
+....e....
+....e....
+..lllll..
+.nnnnnnn.
 frame
-...xxx...
-..x...x..
-.xxxxxxx.
-xxxxxxxxx
-xx.....xx
-xx.xxx.xx
-xx.....xx
-xxxxxxxxx
-.xxxxxxx.
+...ddd...
+..d...d..
+.lllllll.
+lllllllln
+nnnnynnnd
+lnnnnnnnd
+lnnnnnnnd
+lnnnnnnnd
+.ddddddd.
 frame
-....x....
-.x..x..x.
-..x.x.x..
-...xxx...
-xxxxxxxxx
-...xxx...
-..x.x.x..
-.x..x..x.
-....x....
+....c....
+.c..c..c.
+..c.c.c..
+...cwc...
+cccwwwccc
+...cwc...
+..c.c.c..
+.c..c..c.
+....c....
 )";
 
 constexpr const char* kKibble = R"(size 8 8
@@ -198,60 +211,73 @@ kbbbbbbk
 ..kkkk..
 )";
 
-// Quest path cards, 9x9 masks: fight, rest, forage, boss, home.
+// Quest path cards, 9x9 icons drawn with draw_icon: fight, rest, forage, boss, home.
 constexpr const char* kNodes = R"(size 9 9
 palette
-x ffffff
+w f4f4f4
+g 94b0c2
+s 566c86
+r e04050
+m b13e53
+o ef7d57
+y ffcd75
+a d9a066
+h 38b764
+e 257179
+c 73eff7
+n 8b5a2b
+l b8865b
+d 5d3a1f
 frame
-x.......x
-.x.....x.
-..x...x..
-...x.x...
-....x....
-...x.x...
-.xx...xx.
-.xx...xx.
-x.......x
+w.......w
+.w.....w.
+..w...w..
+...w.w...
+....g....
+...w.w...
+.yy...yy.
+.yn...ny.
+n.......n
 frame
-....x....
-...xx....
-...xxx...
-..xxxx.x.
-..xx.xxx.
-...xxx...
-.x.....x.
-..xx.xx..
-....x....
+....o....
+...oo....
+...oyo...
+..oyyo.o.
+..oyyyoo.
+...oyo...
+.l.....n.
+..ln.nl..
+....n....
+frame
+......hh.
+.hh..hhhh
+hhhh.hhe.
+.ehh.e...
+...ee....
+....e....
+....e....
+..lllll..
+.nnnnnnn.
 frame
 .........
-.xx...xx.
-xxxx.xxxx
-.xxx.xxx.
-...x.x...
-....x....
-....x....
-..xxxxx..
-.xxxxxxx.
-frame
-x...x...x
-xx.xxx.xx
-xxxxxxxxx
-xxxxxxxxx
 .........
-.xxxxxxx.
-.x.x.x.x.
-.xxxxxxx.
+y...y...y
+yy.yyy.yy
+yyyyyyyyy
+yryywyyry
+yyyyyyyya
+aaaaaaaaa
 .........
 frame
-....x....
-...xxx...
-..xxxxx..
-.xxxxxxx.
-xxxxxxxxx
-.xx...xx.
-.xx.x.xx.
-.xx.x.xx.
-.xxxxxxx.
+....m....
+...mrm...
+..mrrrm..
+.mrrrrrm.
+mrrrrrrrm
+.wwwwwwg.
+.wwnnwwg.
+.wwnnwwg.
+.wwnnwwg.
 )";
 
 // Forever Partner badge: a small infinity sign.

@@ -122,7 +122,7 @@ public:
             bool sel = i == selected_;
             if (sel) fb.fill_rect(x, 0, 13, kTopBarH, t.accent);
             int bob = sel && (now / 300) % 2 ? 1 : 0;  // the chosen icon bobs
-            fb.draw_mask(ic.menu, i, x + 2, 2 - bob, sel ? t.ui : mix(t.ui_text, t.ui, 70));
+            fb.draw_icon(ic.menu, i, x + 2, 2 - bob, t.ui, t.ui, sel ? 0 : 56);
         }
         fb.fill_rect(0, kTopBarH - 1, kScreenW, 1, mix(t.ui, t.accent, 60));
 

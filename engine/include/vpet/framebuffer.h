@@ -39,6 +39,10 @@ public:
     void draw_sprite(const Sprite& s, int frame, int x, int y, int scale = 1, bool flip = false);
     // Draws every opaque pixel of the sprite in one color (for UI icons).
     void draw_mask(const Sprite& s, int frame, int x, int y, Color c);
+    // Draws the sprite with a 1px outline around its shape (so it covers
+    // w+2 x h+2 starting at x-1, y-1). fade blends every color toward
+    // fade_to (0 = none, 256 = all fade_to), for dimmed icons.
+    void draw_icon(const Sprite& s, int frame, int x, int y, Color outline, Color fade_to = 0, int fade = 0);
     // Built-in 3x5 font, 4px advance. Lowercase is drawn as uppercase.
     void draw_text(int x, int y, const std::string& text, Color c);
     void draw_text_centered(int y, const std::string& text, Color c);

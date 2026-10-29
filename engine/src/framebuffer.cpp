@@ -58,6 +58,21 @@ void Framebuffer::draw_mask(const Sprite& s, int frame, int x, int y, Color c) {
             if (src[sy * s.w + sx]) set(x + sx, y + sy, c);
 }
 
+void Framebuffer::draw_icon(const Sprite& s, int frame, int x, int y, Color outline, Color fade_to, int fade) {
+    if (!s.valid()) return;
+    frame = ((frame % s.frames) + s.frames) % s.frames;
+    const uint8_t* src = &s.pixels[size_t(frame) * s.w * s.h];
+    Color edge = mix(outline, fade_to, fade);
+    // Outline first: every opaque pixel paints its 8 neighbours, then the
+    // colors go on top, leaving the edge only outside the shape.
+    for (int sy = 0; sy < s.h; ++sy)
+        for (int sx = 0; sx < s.w; ++sx)
+            if (src[sy * s.w + sx]) fill_rect(x + sx - 1, y + sy - 1, 3, 3, edge);
+    for (int sy = 0; sy < s.h; ++sy)
+        for (int sx = 0; sx < s.w; ++sx)
+            if (uint8_t idx = src[sy * s.w + sx]) set(x + sx, y + sy, mix(s.palette[idx], fade_to, fade));
+}
+
 void Framebuffer::draw_text(int x, int y, const std::string& text, Color c) {
     for (char ch : text) {
         if (const char* g = glyph_for(ch)) {

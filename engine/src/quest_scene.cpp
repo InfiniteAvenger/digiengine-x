@@ -364,7 +364,7 @@ void QuestScene::draw(Framebuffer& fb) {
                 fb.panel(x, kCardY, kCardW, kCardH, mix(t.ui, t.ui_text, 16), boss ? t.accent : mix(t.ui, t.ui_text, 45));
                 fb.panel(x + 2, kCardY + 2, 7, 8, t.accent, mix(t.accent, rgb(0, 0, 0), 80));
                 fb.draw_text(x + 4, kCardY + 3, std::string(1, char('A' + i)), t.ui);
-                fb.draw_mask(icons().nodes, frame, x + (kCardW - 9) / 2, kCardY + 6, boss ? t.accent : t.ui_text);
+                fb.draw_icon(icons().nodes, frame, x + (kCardW - 9) / 2, kCardY + 7, t.ui);
                 fb.draw_text(x + (kCardW - Framebuffer::text_width(label)) / 2, kCardY + 19, label,
                              boss ? t.accent : mix(t.ui_text, t.ui, 30));
             }
