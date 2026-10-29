@@ -117,44 +117,37 @@
     { "id": "crash",      "name": "CRASH",      "power": 14 }
   ],
 
+  "families": {
+    "beast":   { "drops": [ { "item": "meat", "chance": 0.6 }, { "item": "hide", "chance": 0.4 }, { "item": "salt", "chance": 0.2 }, { "item": "patch", "chance": 0.05 } ] },
+    "machine": { "drops": [ { "item": "scrap", "chance": 0.6 }, { "item": "wire", "chance": 0.4 }, { "item": "gear", "chance": 0.2 }, { "item": "circuit", "chance": 0.1 }, { "item": "power_cell", "chance": 0.03 } ] },
+    "plant":   { "drops": [ { "item": "vine", "chance": 0.6 }, { "item": "berry", "chance": 0.3 }, { "item": "data_seed", "chance": 0.3 }, { "item": "herb_seed", "chance": 0.15 }, { "item": "glow_seed", "chance": 0.03 } ] },
+    "dark":    { "drops": [ { "item": "core_shard", "chance": 0.15 }, { "item": "power_cell", "chance": 0.3 }, { "item": "circuit", "chance": 0.3 }, { "item": "glow_seed", "chance": 0.1 }, { "item": "overclock", "chance": 0.1 } ] }
+  },
+
+  "quest": {
+    "tiers": [
+      { "stage": "child", "min_floor": 1, "max_floor": 9 },
+      { "stage": "adult", "min_floor": 10, "max_floor": 19 },
+      { "stage": "perfect", "min_floor": 20, "max_floor": 29 },
+      { "stage": "ultimate", "min_floor": 30 }
+    ]
+  },
+
   "enemies": [
     {
-      "id": "fangbit", "name": "FANGBIT", "sprite": "sprites/fangbit.spr",
-      "stats": { "hp": 18, "atk": 5, "def": 3, "spd": 5 },
-      "moves": ["bite", "claw"],
-      "drops": [
-        { "item": "meat", "chance": 0.6 },
-        { "item": "hide", "chance": 0.4 },
-        { "item": "salt", "chance": 0.2 },
-        { "item": "patch", "chance": 0.05 }
-      ]
+      "id": "fangbit", "name": "FANGBIT", "family": "beast", "sprite": "sprites/fangbit.spr",
+      "stats": { "hp": 18, "atk": 5, "def": 3, "spd": 5 }, "moves": ["bite", "claw"], "max_floor": 14
     },
     {
-      "id": "cogbot", "name": "COGBOT", "sprite": "sprites/cogbot.spr",
-      "stats": { "hp": 22, "atk": 4, "def": 5, "spd": 3 },
-      "moves": ["gear_toss"],
-      "drops": [
-        { "item": "scrap", "chance": 0.6 },
-        { "item": "wire", "chance": 0.4 },
-        { "item": "gear", "chance": 0.2 },
-        { "item": "circuit", "chance": 0.1 },
-        { "item": "power_cell", "chance": 0.03 }
-      ]
+      "id": "cogbot", "name": "COGBOT", "family": "machine", "sprite": "sprites/cogbot.spr",
+      "stats": { "hp": 22, "atk": 4, "def": 5, "spd": 3 }, "moves": ["gear_toss"], "max_floor": 14
     },
     {
-      "id": "vinelet", "name": "VINELET", "sprite": "sprites/vinelet.spr",
-      "stats": { "hp": 16, "atk": 4, "def": 3, "spd": 6 },
-      "moves": ["vine_whip"],
-      "drops": [
-        { "item": "vine", "chance": 0.6 },
-        { "item": "berry", "chance": 0.3 },
-        { "item": "data_seed", "chance": 0.3 },
-        { "item": "herb_seed", "chance": 0.15 },
-        { "item": "glow_seed", "chance": 0.03 }
-      ]
+      "id": "vinelet", "name": "VINELET", "family": "plant", "sprite": "sprites/vinelet.spr",
+      "stats": { "hp": 16, "atk": 4, "def": 3, "spd": 6 }, "moves": ["vine_whip"], "max_floor": 14
     },
     {
-      "id": "glitch_king", "name": "GLITCH KING", "sprite": "sprites/glitch_king.spr", "boss": true,
+      "id": "glitch_king", "name": "GLITCH KING", "family": "dark", "sprite": "sprites/glitch_king.spr", "boss": true,
       "stats": { "hp": 50, "atk": 7, "def": 6, "spd": 6 },
       "moves": ["crash", "claw"],
       "drops": [

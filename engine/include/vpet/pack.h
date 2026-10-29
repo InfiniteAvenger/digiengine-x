@@ -106,12 +106,21 @@ struct Drop {
 };
 
 struct Enemy {
-    std::string id, name;
+    std::string id, name, family;
     Sprite sprite;
-    Stats stats;  // at floor 1
+    Stats stats;  // at min_floor; grows 15% per floor above it
     std::vector<int> moves;
-    std::vector<Drop> drops;
-    bool boss = false;  // appears on every 10th floor
+    std::vector<Drop> drops;  // own drops, or the family table
+    bool boss = false;        // appears on every 10th floor
+    int min_floor = 1;
+    int max_floor = 0;        // 0 = no upper limit
+    int species = -1;         // set when generated from a pack creature
+};
+
+// Which stage of creature appears on which floors.
+struct EnemyTier {
+    Stage stage;
+    int min_floor, max_floor;  // max 0 = no upper limit
 };
 
 struct LearnRule {
@@ -125,6 +134,8 @@ struct Species {
     Sprite sprite;
     Care care;
     Stats stats;
+    std::string family;  // shared drop table, e.g. "beast"
+    bool enemy = true;   // may appear in quests (its stage must have a tier)
     std::vector<LearnRule> learns;
     std::vector<EvolveRule> evolve;
 };
@@ -152,7 +163,9 @@ struct Pack {
     std::vector<Recipe> recipes;
     std::vector<Crop> crops;
     std::vector<Move> moves;
-    std::vector<Enemy> enemies;
+    std::vector<Enemy> enemies;  // hand-written ones, then one per eligible creature
+    std::vector<std::pair<std::string, std::vector<Drop>>> family_drops;
+    std::vector<EnemyTier> tiers;
     std::vector<std::pair<int, int>> start_items;  // given with a new egg
 
     int find_species(const std::string& id) const;

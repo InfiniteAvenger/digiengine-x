@@ -1,4 +1,6 @@
 #include "vpet/pack.h"
+#include <algorithm>
+#include <cctype>
 #include "vpet/json.h"
 #include "vpet/platform.h"
 #include "vpet/png.h"
@@ -271,6 +273,8 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
             return false;
         }
         s.stats = default_stats(s.stage);
+        s.family = js["family"].str_or("");
+        s.enemy = js["enemy"].bool_or(true);
         read_stats(js["stats"], s.stats);
         const Json& learns = js["learns"];
         for (size_t l = 0; l < learns.size(); ++l) {
@@ -321,13 +325,56 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
         out.rosters.push_back(std::move(ro));
     }
 
+    auto read_drops = [&](const Json& list, const std::string& where, std::vector<Drop>& drops) {
+        for (size_t d = 0; d < list.size(); ++d) {
+            Drop drop;
+            if (!item_ref(out, list[d]["item"].str_or(""), where, drop.item, err)) return false;
+            drop.chance = float(list[d]["chance"].num_or(0));
+            drops.push_back(drop);
+        }
+        return true;
+    };
+
+    // Shared drop tables: "families": { "beast": { "drops": [...] }, ... }
+    const Json& families = root["families"];
+    for (size_t i = 0; i < families.size(); ++i) {
+        std::vector<Drop> drops;
+        if (!read_drops(families[i]["drops"], "family " + families.key(i), drops)) return false;
+        out.family_drops.push_back({families.key(i), std::move(drops)});
+    }
+    auto family_table = [&](const std::string& family) -> const std::vector<Drop>* {
+        for (const auto& [name, drops] : out.family_drops)
+            if (name == family) return &drops;
+        return nullptr;
+    };
+
+    // Which creature stages appear on which floors.
+    const Json& tiers = root["quest"]["tiers"];
+    if (tiers.is_null()) {
+        out.tiers = {{Stage::Child, 1, 9}, {Stage::Adult, 10, 19}, {Stage::Perfect, 20, 29}, {Stage::Ultimate, 30, 0}};
+    } else {
+        for (size_t i = 0; i < tiers.size(); ++i) {
+            EnemyTier tier;
+            if (!parse_stage(tiers[i]["stage"].str_or(""), tier.stage)) {
+                err = "quest.tiers: unknown stage '" + tiers[i]["stage"].str_or("") + "'";
+                return false;
+            }
+            tier.min_floor = tiers[i]["min_floor"].int_or(1);
+            tier.max_floor = tiers[i]["max_floor"].int_or(0);
+            out.tiers.push_back(tier);
+        }
+    }
+
     const Json& enemies = root["enemies"];
     for (size_t i = 0; i < enemies.size(); ++i) {
         const Json& je = enemies[i];
         Enemy e;
         e.id = je["id"].str_or("");
         e.name = je["name"].str_or(e.id);
+        e.family = je["family"].str_or("");
         e.boss = je["boss"].bool_or(false);
+        e.min_floor = je["min_floor"].int_or(1);
+        e.max_floor = je["max_floor"].int_or(0);
         e.stats = default_stats(Stage::Infant);
         read_stats(je["stats"], e.stats);
         for (size_t m = 0; m < je["moves"].size(); ++m) {
@@ -339,14 +386,39 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
             err = e.id + ": enemies need at least one move";
             return false;
         }
-        for (size_t d = 0; d < je["drops"].size(); ++d) {
-            Drop drop;
-            if (!item_ref(out, je["drops"][d]["item"].str_or(""), e.id, drop.item, err)) return false;
-            drop.chance = float(je["drops"][d]["chance"].num_or(0));
-            e.drops.push_back(drop);
-        }
+        if (!read_drops(je["drops"], e.id, e.drops)) return false;
+        if (e.drops.empty())
+            if (const auto* table = family_table(e.family)) e.drops = *table;
         if (!load_sprite_file(platform, dir, je["sprite"].str_or(""), e.sprite, err, je)) return false;
         out.enemies.push_back(std::move(e));
+    }
+
+    // Every creature whose stage has a tier also fights in quests, using its
+    // own art, stats and moves, and its family's drops.
+    if (root["quest"]["species_enemies"].bool_or(true)) {
+        for (size_t s = 0; s < out.species.size(); ++s) {
+            const Species& sp = out.species[s];
+            if (!sp.enemy) continue;
+            for (const EnemyTier& tier : out.tiers) {
+                if (tier.stage != sp.stage) continue;
+                Enemy e;
+                e.id = sp.id;
+                e.name = sp.name;
+                for (char& c : e.name) c = char(toupper(static_cast<unsigned char>(c)));
+                e.family = sp.family;
+                e.sprite = sp.sprite;
+                e.stats = sp.stats;
+                e.species = int(s);
+                e.min_floor = tier.min_floor;
+                e.max_floor = tier.max_floor;
+                for (const LearnRule& r : sp.learns)
+                    if (std::find(e.moves.begin(), e.moves.end(), r.move) == e.moves.end()) e.moves.push_back(r.move);
+                if (e.moves.empty() && !out.moves.empty()) e.moves.push_back(0);
+                if (e.moves.empty()) continue;  // a pack with no moves at all
+                if (const auto* table = family_table(e.family)) e.drops = *table;
+                out.enemies.push_back(std::move(e));
+            }
+        }
     }
 
     const Json& crops = root["crops"];

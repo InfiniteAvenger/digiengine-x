@@ -45,10 +45,18 @@ int harvest(const Pack& pack, Pet& pet, int plot, uint64_t now_ms, uint32_t roll
 
 constexpr int kBossEvery = 10;
 
-// Enemy stats grow 15% per floor; bosses get extra HP.
-Stats enemy_stats(const Enemy& e, int floor);
-// Picks an enemy for a floor: a boss every 10th floor, otherwise a non-boss.
-int pick_enemy(const Pack& pack, int floor, uint32_t rnd);
+// Enemy stats grow 15% per floor above the enemy's first floor; bosses get +50% HP.
+Stats enemy_stats(const Enemy& e, int floor, bool boss);
+
+struct EnemyPick {
+    int index = -1;    // into pack.enemies
+    bool boss = false;
+};
+
+// Picks an enemy whose floor range covers `floor`. Every 10th floor is a boss:
+// a boss enemy in range if the pack has one, else a regular one promoted.
+// Floors past every range use the deepest tier available.
+EnemyPick pick_enemy(const Pack& pack, int floor, uint32_t rnd);
 // mult is the minigame result, about 0.5 (poor) to 1.5 (perfect).
 int damage(int power, float mult, int atk, int def);
 uint32_t floor_xp(int floor);

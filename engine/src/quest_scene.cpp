@@ -77,12 +77,14 @@ private:
         --pet.hunger;  // each floor costs a hunger heart
         ps_ = pet_stats(pack, pet);
         if (pet.run.hp < 0 || pet.run.hp > ps_.hp) pet.run.hp = ps_.hp;
-        enemy_ = pick_enemy(pack, pet.run.floor, game_.rand());
+        EnemyPick pick = pick_enemy(pack, pet.run.floor, game_.rand());
+        enemy_ = pick.index;
+        boss_ = pick.boss;
         const Enemy& e = pack.enemies[enemy_];
-        es_ = enemy_stats(e, pet.run.floor);
+        es_ = enemy_stats(e, pet.run.floor, boss_);
         ehp_ = es_.hp;
         cursor_ = 0;
-        say({"FLOOR " + std::to_string(pet.run.floor) + (e.boss ? " - BOSS!" : ""), "A WILD " + e.name + " APPEARS!"},
+        say({"FLOOR " + std::to_string(pet.run.floor) + (boss_ ? " - BOSS!" : ""), "A WILD " + e.name + " APPEARS!"},
             Phase::Choose);
     }
 
@@ -230,6 +232,7 @@ private:
     uint64_t msg_until_ = 0;
 
     int enemy_ = -1;
+    bool boss_ = false;
     Stats es_, ps_;
     int ehp_ = 0;
     std::vector<int> moves_, items_;
@@ -260,7 +263,7 @@ void QuestScene::draw(Framebuffer& fb) {
         const Enemy& e = pack.enemies[enemy_];
         fb.draw_sprite(e.sprite, 0, 80, kArenaTop + 10 + bob, 2);
         fb.panel(3, 15, 54, 14, mix(t.ui, t.bg_top, 40), mix(t.ui, t.ui_text, 70));
-        fb.draw_text(5, 17, e.name, e.boss ? t.accent : t.ui_text);
+        fb.draw_text(5, 17, e.name, boss_ ? t.accent : t.ui_text);
         draw_bar(fb, 5, 24, 50, 3, ehp_, es_.hp, rgb(0xe0, 0x40, 0x50), dim);
     }
 

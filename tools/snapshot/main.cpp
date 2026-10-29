@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include "vpet/game.h"
@@ -214,6 +215,54 @@ void evolution_checks(FakePlatform& p, const std::string& demo_dir) {
           "6 stages; old 'baby' packs still load as infant");
 }
 
+// Creatures as tiered quest enemies, family drop tables, boss floors.
+void enemy_checks(FakePlatform& p, const std::string& demo_dir) {
+    std::printf("tiered enemies and family drops\n");
+    vpet::Pack pack;
+    std::string err;
+    vpet::load_pack(p, demo_dir, pack, err);
+    auto names_on = [&](int floor, bool* any_boss = nullptr) {
+        std::set<std::string> names;
+        for (uint32_t r = 0; r < 500; ++r) {
+            vpet::EnemyPick pick = vpet::pick_enemy(pack, floor, r * 2654435761u);
+            names.insert(pack.enemies[pick.index].name);
+            if (any_boss && pick.boss) *any_boss = true;
+        }
+        return names;
+    };
+    auto find = [&](const std::string& id) {
+        for (const vpet::Enemy& e : pack.enemies)
+            if (e.id == id) return &e;
+        return static_cast<const vpet::Enemy*>(nullptr);
+    };
+
+    bool boss3 = false;
+    auto f3 = names_on(3, &boss3);
+    check(f3.count("SPROCKET") && f3.count("MUDLUMP") && f3.count("FANGBIT") && !f3.count("VOLTWING") && !boss3,
+          "floors 1-9: child creatures and early enemies, no adults or bosses");
+    check(!find("blip") && !find("pixegg"), "eggs and infants never appear as enemies");
+    auto f15 = names_on(15);
+    check(f15.count("VOLTWING") && !f15.count("FANGBIT") && !f15.count("SPROCKET"),
+          "floors 10-19: adult creatures; enemies past their max floor drop out");
+    auto f25 = names_on(25);
+    check(f25.size() == 1 && f25.count("VOLTWING"), "past every tier, the deepest tier keeps appearing");
+    bool boss10 = false;
+    auto f10 = names_on(10, &boss10);
+    check(boss10 && f10.size() == 1 && f10.count("GLITCH KING"), "every 10th floor is the pack's boss");
+
+    const vpet::Enemy *fang = find("fangbit"), *mud = find("mudlump"), *king = find("glitch_king"), *volt = find("voltwing");
+    const vpet::Drop& beast_first = pack.family_drops[0].second[0];
+    check(fang && fang->drops.size() == 4 && fang->drops[0].item == beast_first.item,
+          "an enemy without its own drops uses its family table");
+    check(mud && mud->drops.size() == 4 && mud->drops[0].item == pack.find_item("meat"),
+          "creature enemies use their family table");
+    check(king && king->drops[0].item == pack.find_item("core_shard") && king->drops[0].chance == 0.5f,
+          "explicit drops override the family table");
+    check(volt && vpet::enemy_stats(*volt, 10, false).hp == 60 && vpet::enemy_stats(*volt, 12, false).hp == 78 &&
+              vpet::enemy_stats(*volt, 12, true).hp == 117,
+          "enemies scale from the start of their tier; bosses get +50% HP");
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -224,6 +273,7 @@ int main(int argc, char* argv[]) {
     FakePlatform p;
     pack_tool_checks(p, argv[1]);
     evolution_checks(p, argv[1]);
+    enemy_checks(p, argv[1]);
     auto game = std::make_unique<vpet::Game>(p);
     if (!game->init(argv[1])) return 1;
     std::string out = argv[2];

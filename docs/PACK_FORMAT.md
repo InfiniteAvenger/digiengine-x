@@ -207,3 +207,41 @@ put a fallback with only a time last if it should always evolve.
 | `min_quest_floor`   | Best quest floor ever cleared at least this             |
 
 Mistakes and effort in the current form reset when the creature evolves.
+
+## Quest enemies, tiers and families
+
+Creatures double as quest enemies automatically. Each creature whose stage
+has a tier appears on that tier's floors, with its own art, stats and moves:
+
+```json
+"quest": {
+  "species_enemies": true,
+  "tiers": [
+    { "stage": "child",    "min_floor": 1,  "max_floor": 9 },
+    { "stage": "adult",    "min_floor": 10, "max_floor": 19 },
+    { "stage": "perfect",  "min_floor": 20, "max_floor": 29 },
+    { "stage": "ultimate", "min_floor": 30 }
+  ]
+}
+```
+
+These tiers are the default when `quest` is left out. Set `"enemy": false`
+on a creature to keep it out of quests. Hand-written `enemies` still work and
+may set `"min_floor"` / `"max_floor"`. Enemy stats grow 15% per floor above
+the first floor they appear on.
+
+Every 10th floor is a boss: a `"boss": true` enemy whose range covers the
+floor, or, if there is none, a regular enemy promoted to boss (+50% HP).
+Floors deeper than every range keep using the deepest tier that exists.
+
+Drops come from shared family tables, so a big roster needs no per-creature
+drop lists. An enemy's own `drops` override its family's.
+
+```json
+"families": {
+  "beast":   { "drops": [ { "item": "meat",  "chance": 0.6 } ] },
+  "machine": { "drops": [ { "item": "scrap", "chance": 0.6 } ] }
+}
+```
+
+Set a creature's or enemy's `"family"` to one of these names.

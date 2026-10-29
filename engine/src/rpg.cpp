@@ -121,21 +121,38 @@ int harvest(const Pack& pack, Pet& pet, int plot, uint64_t now_ms, uint32_t roll
 
 // --- Quest --------------------------------------------------------------------
 
-Stats enemy_stats(const Enemy& e, int floor) {
-    auto grow = [&](int v) { return v + v * 15 * (floor - 1) / 100; };
+Stats enemy_stats(const Enemy& e, int floor, bool boss) {
+    int above = std::max(0, floor - e.min_floor);
+    auto grow = [&](int v) { return v + v * 15 * above / 100; };
     Stats s{grow(e.stats.hp), grow(e.stats.atk), grow(e.stats.def), grow(e.stats.spd)};
-    if (e.boss) s.hp += s.hp / 2;
+    if (boss) s.hp += s.hp / 2;
     return s;
 }
 
-int pick_enemy(const Pack& pack, int floor, uint32_t rnd) {
-    bool want_boss = floor % kBossEvery == 0;
-    std::vector<int> pool;
-    for (size_t i = 0; i < pack.enemies.size(); ++i)
-        if (pack.enemies[i].boss == want_boss) pool.push_back(int(i));
-    if (pool.empty())  // pack has no bosses (or only bosses): use anything
-        for (size_t i = 0; i < pack.enemies.size(); ++i) pool.push_back(int(i));
-    return pool.empty() ? -1 : pool[rnd % pool.size()];
+EnemyPick pick_enemy(const Pack& pack, int floor, uint32_t rnd) {
+    auto in_range = [&](const Enemy& e) { return floor >= e.min_floor && (e.max_floor == 0 || floor <= e.max_floor); };
+    bool boss_floor = floor % kBossEvery == 0;
+
+    std::vector<int> bosses, regulars;
+    for (size_t i = 0; i < pack.enemies.size(); ++i) {
+        if (!in_range(pack.enemies[i])) continue;
+        (pack.enemies[i].boss ? bosses : regulars).push_back(int(i));
+    }
+    if (boss_floor && !bosses.empty()) return {bosses[rnd % bosses.size()], true};
+
+    if (regulars.empty()) {
+        // Past every range: the deepest tier that has started.
+        int deepest = 0;
+        for (const Enemy& e : pack.enemies)
+            if (!e.boss && e.min_floor <= floor) deepest = std::max(deepest, e.min_floor);
+        for (size_t i = 0; i < pack.enemies.size(); ++i)
+            if (!pack.enemies[i].boss && pack.enemies[i].min_floor == deepest) regulars.push_back(int(i));
+    }
+    if (regulars.empty())  // only bosses exist
+        for (size_t i = 0; i < pack.enemies.size(); ++i) regulars.push_back(int(i));
+    if (regulars.empty()) return {};
+    int idx = regulars[rnd % regulars.size()];
+    return {idx, boss_floor || pack.enemies[idx].boss};
 }
 
 int damage(int power, float mult, int atk, int def) {
