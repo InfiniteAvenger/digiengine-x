@@ -1,4 +1,5 @@
 // Full-screen menus opened from the home screen: status, feed, train.
+#include <algorithm>
 #include <cstdio>
 #include "icons.h"
 #include "scenes.h"
@@ -106,8 +107,10 @@ public:
             row(45, "IN FORM", since(pet.stage_ms));
             row(54, "WEIGHT", std::to_string(pet.weight) + "G");
             if (!s.evolve.empty()) {
-                uint64_t due = pet.stage_ms + uint64_t(s.evolve[0].after_seconds) * 1000;
-                row(63, "NEXT FORM", due > now ? format_duration(due - now) : "SOON");
+                // Earliest any branch could happen; past that, it is waiting on conditions.
+                uint64_t due = UINT64_MAX;
+                for (const EvolveRule& r : s.evolve) due = std::min(due, pet.stage_ms + uint64_t(r.after_seconds) * 1000);
+                row(63, "NEXT FORM", due > now ? format_duration(due - now) : "NEEDS MORE");
             }
             fb.draw_sprite(s.sprite, 0, (kScreenW - s.sprite.w * 2) / 2, 74, 2);
         } else if (page_ == 1) {
@@ -119,8 +122,8 @@ public:
             row(49, "SICK", pet.sick ? "YES" : "NO");
             row(58, "SLEEPING", pet.asleep ? "YES" : "NO");
             row(67, "LIGHTS", pet.lights_on ? "ON" : "OFF");
-            row(76, "MISTAKES", std::to_string(pet.care_mistakes));
-            row(85, "TRAINED", std::to_string(pet.trainings) + "X");
+            row(76, "MISTAKES", std::to_string(pet.care_mistakes) + " (" + std::to_string(pet.stage_mistakes) + " NOW)");
+            row(85, "TRAINED", std::to_string(pet.trainings) + "X EFFORT " + std::to_string(pet.effort));
         } else if (page_ == 3) {
             const Pack& pack = game_.pack();
             Stats st = pet_stats(pack, pet);

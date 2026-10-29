@@ -28,7 +28,8 @@
     {
       "id": "blip",
       "name": "Blip",
-      "stage": "baby",
+      "stage": "infant",
+      "family": "plant",
       "sprite": "sprites/blip.spr",
       "care": {
         "hunger_minutes": 5,
@@ -39,6 +40,61 @@
         "weight": 5
       },
       "stats": { "hp": 20, "atk": 5, "def": 4, "spd": 5 },
+      "learns": [
+        { "move": "tackle", "level": 1 },
+        { "move": "bubble", "level": 2 },
+        { "move": "zap_code", "level": 4 },
+        { "move": "lucky_roll", "level": 6 }
+      ],
+      "evolve": [
+        { "to": "sprocket", "hours_in_stage": 0.25, "max_care_mistakes": 0, "min_effort": 1 },
+        { "to": "mudlump", "hours_in_stage": 0.25 }
+      ]
+    },
+    {
+      "id": "sprocket",
+      "name": "Sprocket",
+      "stage": "child",
+      "family": "machine",
+      "sprite": "sprites/sprocket.spr",
+      "care": { "hunger_minutes": 5, "strength_minutes": 5, "poop_minutes": 8, "sleep": "21:00", "wake": "08:00", "weight": 8 },
+      "stats": { "hp": 34, "atk": 9, "def": 8, "spd": 8 },
+      "learns": [
+        { "move": "tackle", "level": 1 },
+        { "move": "bubble", "level": 2 },
+        { "move": "zap_code", "level": 4 },
+        { "move": "lucky_roll", "level": 6 }
+      ],
+      "evolve": [
+        { "to": "voltwing", "hours_in_stage": 24, "min_level": 5, "min_quest_floor": 5 }
+      ]
+    },
+    {
+      "id": "mudlump",
+      "name": "Mudlump",
+      "stage": "child",
+      "family": "beast",
+      "sprite": "sprites/mudlump.spr",
+      "care": { "hunger_minutes": 5, "strength_minutes": 5, "poop_minutes": 8, "sleep": "21:00", "wake": "08:00", "weight": 8 },
+      "stats": { "hp": 40, "atk": 8, "def": 9, "spd": 5 },
+      "learns": [
+        { "move": "tackle", "level": 1 },
+        { "move": "bubble", "level": 2 },
+        { "move": "zap_code", "level": 4 },
+        { "move": "lucky_roll", "level": 6 }
+      ],
+      "evolve": [
+        { "to": "voltwing", "hours_in_stage": 24, "min_level": 8 }
+      ]
+    },
+    {
+      "id": "voltwing",
+      "name": "Voltwing",
+      "stage": "adult",
+      "family": "dark",
+      "sprite": "sprites/voltwing.spr",
+      "care": { "hunger_minutes": 20, "strength_minutes": 20, "poop_minutes": 30, "sleep": "22:00", "wake": "08:00", "weight": 15 },
+      "stats": { "hp": 60, "atk": 15, "def": 12, "spd": 13 },
       "learns": [
         { "move": "tackle", "level": 1 },
         { "move": "bubble", "level": 2 },

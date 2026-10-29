@@ -134,6 +134,7 @@ void pack_tool_checks(FakePlatform& p, const std::string& demo_dir) {
     replace("sprites/blip.spr", "sprites/blip.png");
     write_file(dir + "/pack.json", pack_json);
     for (const char* f : {"pixegg.spr", "fangbit.spr", "cogbot.spr", "vinelet.spr", "glitch_king.spr", "items.spr",
+                          "sprocket.spr", "mudlump.spr", "voltwing.spr",
                           "crop_berry.spr", "crop_herb.spr", "crop_glow.spr"}) {
         p.read_file(demo_dir + "/sprites/" + f, text);
         write_file(dir + "/sprites/" + f, text);
@@ -164,6 +165,55 @@ void pack_tool_checks(FakePlatform& p, const std::string& demo_dir) {
     check(!bad_ok && bad.errors.size() >= 3, "baker: reports bad stages, missing sprites and unknown species");
 }
 
+// Branching evolution rules, driven directly through simulate().
+void evolution_checks(FakePlatform& p, const std::string& demo_dir) {
+    std::printf("branching evolution\n");
+    vpet::Pack pack;
+    std::string err;
+    vpet::load_pack(p, demo_dir, pack, err);
+    int blip = pack.find_species("blip"), sprocket = pack.find_species("sprocket"),
+        mudlump = pack.find_species("mudlump"), voltwing = pack.find_species("voltwing");
+    const uint64_t t0 = p.clock;
+    const uint64_t min = 60'000;
+    auto fresh = [&](int species) {
+        vpet::Pet pet = vpet::new_pet(pack, species, t0);
+        pet.hunger = pet.strength = vpet::kMaxHearts;  // no calls -> no surprise mistakes
+        return pet;
+    };
+
+    vpet::Pet good = fresh(blip);
+    good.effort = 1;
+    vpet::simulate(pack, good, t0 + 14 * min, p.offset);
+    check(good.species == blip, "evolution waits for its time in stage");
+    vpet::simulate(pack, good, t0 + 16 * min, p.offset);
+    check(good.species == sprocket, "no mistakes + effort takes the first branch");
+    check(good.effort == 0 && good.stage_mistakes == 0, "per-form counters reset on evolving");
+
+    vpet::Pet sloppy = fresh(blip);
+    sloppy.effort = 3;
+    sloppy.stage_mistakes = 1;
+    vpet::simulate(pack, sloppy, t0 + 16 * min, p.offset);
+    check(sloppy.species == mudlump, "a care mistake falls through to the fallback branch");
+
+    vpet::Pet lazy = fresh(blip);
+    vpet::simulate(pack, lazy, t0 + 16 * min, p.offset);
+    check(lazy.species == mudlump, "no training also falls through to the fallback");
+
+    vpet::Pet child = fresh(sprocket);
+    child.level = 5;
+    child.run.best = 4;
+    vpet::simulate(pack, child, t0 + 25 * 60 * min, p.offset);
+    check(child.species == sprocket, "a quest-floor condition holds evolution back");
+    child.run.best = 5;
+    vpet::simulate(pack, child, t0 + 25 * 60 * min + min, p.offset);
+    check(child.species == voltwing && pack.species[child.species].stage == vpet::Stage::Adult,
+          "meeting level and floor unlocks the adult form");
+
+    vpet::Stage legacy;
+    check(vpet::parse_stage("baby", legacy) && legacy == vpet::Stage::Infant && vpet::kStageCount == 6,
+          "6 stages; old 'baby' packs still load as infant");
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -173,6 +223,7 @@ int main(int argc, char* argv[]) {
     }
     FakePlatform p;
     pack_tool_checks(p, argv[1]);
+    evolution_checks(p, argv[1]);
     auto game = std::make_unique<vpet::Game>(p);
     if (!game->init(argv[1])) return 1;
     std::string out = argv[2];

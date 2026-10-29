@@ -39,10 +39,10 @@ packs/my_pack/
 | `format`              | Must be `1`.                                             |
 | `theme`               | Hex `rrggbb` colors for the home screen and menus.       |
 | `rosters`             | Selectable "device versions". `eggs` lists starter IDs.  |
-| `species[].stage`     | `egg`, `baby`, `baby2`, `child`, `adult`, `perfect`, `ultimate` |
+| `species[].stage`     | `egg`, `infant`, `child`, `adult`, `perfect`, `ultimate` (old `baby`/`baby2` load as `infant`) |
 | `species[].sprite`    | Path to a sprite file, relative to the pack folder.      |
 | `species[].evolve`    | Rules checked in order; the first one that passes wins.  |
-| `evolve[].after_minutes` | Time spent in the current stage before evolving.     |
+| `species[].family`    | Ecological family (`beast`, `machine`, `plant`, `dark`, ...) used for quest drops |
 | `species[].care`      | Optional. How fast needs change; see below.              |
 
 ### care
@@ -61,8 +61,7 @@ Stage defaults (hunger / strength / poop minutes, bedtime, weight):
 
 | Stage    | Needs (min) | Bedtime     | Weight |
 |----------|-------------|-------------|--------|
-| baby     | 3 / 3 / 3   | 20:00-09:00 | 5      |
-| baby2    | 30 / 30 / 60 | 20:00-09:00 | 10    |
+| infant   | 3 / 3 / 3   | 20:00-09:00 | 5      |
 | child    | 48 / 48 / 120 | 21:00-08:00 | 20   |
 | adult    | 59 / 59 / 120 | 22:00-08:00 | 30   |
 | perfect  | 66 / 66 / 120 | 23:00-09:00 | 40   |
@@ -185,3 +184,26 @@ frame
   `.` is always transparent and `#` is reserved, so neither can be listed.
 - `frame`: followed by exactly `H` rows of exactly `W` palette characters.
   Repeat for each animation frame. Frame 0 and 1 are the idle animation.
+
+## Evolution rules
+
+```json
+"evolve": [
+  { "to": "sprocket", "hours_in_stage": 0.25, "max_care_mistakes": 0, "min_effort": 1 },
+  { "to": "mudlump",  "hours_in_stage": 0.25 }
+]
+```
+
+Rules are tried top to bottom every second; the **first** whose conditions all
+hold wins. If none hold, the creature stays in its form and keeps checking, so
+put a fallback with only a time last if it should always evolve.
+
+| Field               | Condition                                              |
+|---------------------|--------------------------------------------------------|
+| `hours_in_stage`    | Time in the current form (`after_minutes` also works)  |
+| `max_care_mistakes` | Care mistakes made **in this form** at most this        |
+| `min_level`         | Pet level at least this                                 |
+| `min_effort`        | Successful trainings **in this form** at least this     |
+| `min_quest_floor`   | Best quest floor ever cleared at least this             |
+
+Mistakes and effort in the current form reset when the creature evolves.

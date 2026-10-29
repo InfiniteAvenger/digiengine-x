@@ -38,6 +38,7 @@ void enter_form(const Pack& pack, Pet& pet, int species, uint64_t t) {
     pet.species = species;
     pet.stage_ms = t;
     pet.hunger_s = pet.strength_s = pet.poop_s = 0;
+    pet.stage_mistakes = pet.effort = 0;
     uint16_t base = pack.species[species].care.weight;
     if (pet.weight < base) pet.weight = base;
 }
@@ -45,9 +46,11 @@ void enter_form(const Pack& pack, Pet& pet, int species, uint64_t t) {
 uint32_t tick(const Pack& pack, Pet& pet, uint64_t t, int32_t utc_offset_s) {
     uint32_t ev = 0;
 
+    // First rule (in pack order) whose conditions all hold wins. If none do,
+    // the pet stays and the rules are checked again next second.
     const Species& before = pack.species[pet.species];
     for (const EvolveRule& rule : before.evolve) {
-        if (t >= pet.stage_ms + uint64_t(rule.after_seconds) * 1000) {
+        if (evolution_ready(rule, pet, t)) {
             ev |= before.stage == Stage::Egg ? EV_HATCHED : EV_EVOLVED;
             enter_form(pack, pet, rule.to, t);
             break;
@@ -92,11 +95,20 @@ uint32_t tick(const Pack& pack, Pet& pet, uint64_t t, int32_t utc_offset_s) {
     missed |= update_call(pet.hunger_call, pet.hunger == 0 && !pet.asleep, t, pet.care_mistakes);
     missed |= update_call(pet.strength_call, pet.strength == 0 && !pet.asleep, t, pet.care_mistakes);
     missed |= update_call(pet.lights_call, pet.asleep && pet.lights_on, t, pet.care_mistakes);
-    if (missed) ev |= EV_MISTAKE;
+    if (missed) {
+        ev |= EV_MISTAKE;
+        pet.stage_mistakes = uint16_t(pet.stage_mistakes + 1);
+    }
     return ev;
 }
 
 }  // namespace
+
+bool evolution_ready(const EvolveRule& rule, const Pet& pet, uint64_t now_ms) {
+    return now_ms >= pet.stage_ms + uint64_t(rule.after_seconds) * 1000 &&
+           (rule.max_care_mistakes < 0 || pet.stage_mistakes <= rule.max_care_mistakes) &&
+           pet.level >= rule.min_level && pet.effort >= rule.min_effort && pet.run.best >= rule.min_quest_floor;
+}
 
 Pet new_pet(const Pack& pack, int species, uint64_t now_ms) {
     Pet p;
@@ -147,6 +159,7 @@ void toggle_lights(Pet& pet) {
 
 void finish_training(const Pack& pack, Pet& pet, bool success) {
     ++pet.trainings;
+    if (success) pet.effort = uint16_t(pet.effort + 1);
     if (success && pet.strength < kMaxHearts) {
         ++pet.strength;
         pet.strength_call = Call{};
@@ -168,6 +181,8 @@ std::string save_pet(const Pack& pack, const Pet& p) {
       << "weight " << p.weight << '\n'
       << "mistakes " << p.care_mistakes << '\n'
       << "trainings " << p.trainings << '\n'
+      << "stage_mistakes " << p.stage_mistakes << '\n'
+      << "effort " << p.effort << '\n'
       << "sick " << int(p.sick) << '\n'
       << "asleep " << int(p.asleep) << '\n'
       << "lights " << int(p.lights_on) << '\n'
@@ -230,6 +245,8 @@ bool load_pet(const Pack& pack, const std::string& text, Pet& out) {
     num("weight", p.weight);
     num("mistakes", p.care_mistakes);
     num("trainings", p.trainings);
+    num("stage_mistakes", p.stage_mistakes);
+    num("effort", p.effort);
     flag("sick", p.sick);
     flag("asleep", p.asleep);
     flag("lights", p.lights_on);

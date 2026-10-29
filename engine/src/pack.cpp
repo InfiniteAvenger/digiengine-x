@@ -6,7 +6,7 @@
 namespace vpet {
 
 namespace {
-constexpr const char* kStageNames[] = {"egg", "baby", "baby2", "child", "adult", "perfect", "ultimate"};
+constexpr const char* kStageNames[] = {"egg", "infant", "child", "adult", "perfect", "ultimate"};
 constexpr const char* kRarityNames[] = {"common", "uncommon", "rare", "epic"};
 constexpr const char* kGameNames[] = {"timing", "mash", "sequence", "dice"};
 
@@ -137,8 +137,7 @@ Care default_care(Stage s) {
     //                 hunger  strength  poop    sleep    wake    weight
     switch (s) {
         case Stage::Egg:      return {0, 0, 0, 0, 0, 0};
-        case Stage::Baby:     return {3 * 60, 3 * 60, 3 * 60, 20 * 60, 9 * 60, 5};
-        case Stage::Baby2:    return {30 * 60, 30 * 60, 60 * 60, 20 * 60, 9 * 60, 10};
+        case Stage::Infant:   return {3 * 60, 3 * 60, 3 * 60, 20 * 60, 9 * 60, 5};
         case Stage::Child:    return {48 * 60, 48 * 60, 120 * 60, 21 * 60, 8 * 60, 20};
         case Stage::Adult:    return {59 * 60, 59 * 60, 120 * 60, 22 * 60, 8 * 60, 30};
         case Stage::Perfect:  return {66 * 60, 66 * 60, 120 * 60, 23 * 60, 9 * 60, 40};
@@ -150,8 +149,7 @@ Care default_care(Stage s) {
 Stats default_stats(Stage s) {
     switch (s) {
         case Stage::Egg:      return {1, 1, 1, 1};
-        case Stage::Baby:     return {20, 5, 4, 5};
-        case Stage::Baby2:    return {30, 8, 6, 6};
+        case Stage::Infant:   return {20, 5, 4, 5};
         case Stage::Child:    return {45, 12, 9, 9};
         case Stage::Adult:    return {70, 18, 14, 12};
         case Stage::Perfect:  return {100, 26, 20, 16};
@@ -162,6 +160,7 @@ Stats default_stats(Stage s) {
 
 bool parse_stage(const std::string& s, Stage& out) {
     int i = index_of(kStageNames, s);
+    if (i < 0 && (s == "baby" || s == "baby2")) i = int(Stage::Infant);  // names from older packs
     if (i >= 0) out = Stage(i);
     return i >= 0;
 }
@@ -294,7 +293,13 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
                 err = out.species[i].id + ": evolves to unknown species '" + to + "'";
                 return false;
             }
-            rule.after_seconds = uint32_t(rules[r]["after_minutes"].num_or(0) * 60.0);
+            const Json& jr = rules[r];
+            double hours = jr["hours_in_stage"].num_or(-1);
+            rule.after_seconds = uint32_t(hours >= 0 ? hours * 3600.0 : jr["after_minutes"].num_or(0) * 60.0);
+            rule.max_care_mistakes = jr["max_care_mistakes"].int_or(-1);
+            rule.min_level = jr["min_level"].int_or(0);
+            rule.min_effort = jr["min_effort"].int_or(0);
+            rule.min_quest_floor = jr["min_quest_floor"].int_or(0);
             out.species[i].evolve.push_back(rule);
         }
     }
@@ -323,7 +328,7 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
         e.id = je["id"].str_or("");
         e.name = je["name"].str_or(e.id);
         e.boss = je["boss"].bool_or(false);
-        e.stats = default_stats(Stage::Baby);
+        e.stats = default_stats(Stage::Infant);
         read_stats(je["stats"], e.stats);
         for (size_t m = 0; m < je["moves"].size(); ++m) {
             int idx;

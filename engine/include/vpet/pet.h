@@ -43,6 +43,9 @@ struct Pet {
     uint16_t weight = 0;
     uint16_t care_mistakes = 0;
     uint16_t trainings = 0;
+    // Counted in the current form only; evolution rules check these.
+    uint16_t stage_mistakes = 0;
+    uint16_t effort = 0;  // successful trainings
     bool sick = false;
     bool asleep = false;
     bool lights_on = true;
@@ -76,6 +79,9 @@ enum SimEvent : uint32_t {
 };
 
 Pet new_pet(const Pack& pack, int species, uint64_t now_ms);
+
+// True if every condition of `rule` holds right now (time included).
+bool evolution_ready(const EvolveRule& rule, const Pet& pet, uint64_t now_ms);
 
 // Advances the pet to now_ms in one-second steps, so a game that was closed
 // for hours catches up exactly as if it had been running (capped at 30 days).

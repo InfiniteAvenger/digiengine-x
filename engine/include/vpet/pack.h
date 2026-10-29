@@ -9,14 +9,23 @@ namespace vpet {
 
 class Platform;
 
-enum class Stage : uint8_t { Egg, Baby, Baby2, Child, Adult, Perfect, Ultimate };
+// The 6-stage lifecycle.
+enum class Stage : uint8_t { Egg, Infant, Child, Adult, Perfect, Ultimate };
+constexpr int kStageCount = 6;
 
 const char* stage_name(Stage s);
+// Accepts the stage names above (lowercase); "baby" and "baby2" load as infant.
 bool parse_stage(const std::string& s, Stage& out);
 
+// One branch of an evolution. A creature's rules are tried in order and the
+// first whose conditions all hold wins; a rule with only a time is a fallback.
 struct EvolveRule {
-    int to = -1;  // species index
-    uint32_t after_seconds = 0;
+    int to = -1;                  // species index
+    uint32_t after_seconds = 0;   // time in the current form ("hours_in_stage")
+    int max_care_mistakes = -1;   // mistakes made in this form; -1 = any
+    int min_level = 0;
+    int min_effort = 0;           // successful trainings in this form
+    int min_quest_floor = 0;      // best floor ever cleared
 };
 
 // How fast a form's needs change. Timers count awake seconds only.
