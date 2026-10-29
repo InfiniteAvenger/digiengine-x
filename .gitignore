@@ -1,0 +1,24 @@
+# Build output
+build/
+out/
+
+# ESP-IDF generated files
+platform/esp32/sdkconfig
+platform/esp32/sdkconfig.old
+platform/esp32/managed_components/
+
+# Content packs are user-supplied and never committed,
+# except the original demo pack that ships with the engine.
+packs/*
+!packs/demo/
+
+# Save files
+saves/
+*.sav
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store

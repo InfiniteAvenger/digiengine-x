@@ -1,0 +1,58 @@
+# vpet (working title)
+
+A data-driven, open-source virtual pet engine inspired by classic 3-button
+v-pets. The engine contains **no copyrighted creatures, names or art**: all
+content is loaded from external *packs* (sprites + JSON). An original demo pack
+ships in `packs/demo/` so the engine is playable out of the box.
+
+Targets: Windows / Linux PC, Android, and ESP32-S3 handheld hardware.
+
+## Layout
+
+```
+engine/          Portable C++17 game core (no platform code, no OS calls)
+  include/vpet/  Public headers
+  src/           Implementation
+platform/sdl/    Desktop (and later Android) frontend using SDL2
+platform/esp32/  ESP32-S3 frontend (not started)
+tools/baker/     Pack baker: JSON+PNG -> compact binary for ESP32 (not started)
+packs/demo/      Original CC0 demo pack
+docs/            Design doc and pack format reference
+```
+
+## Building (Windows, MSYS2 UCRT64)
+
+```bash
+pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-SDL2
+cmake -S . -B build -G Ninja
+cmake --build build
+./build/vpet.exe
+```
+
+## Controls (desktop)
+
+| Button | Keys            | Home screen                  |
+|--------|-----------------|------------------------------|
+| A      | `Z`, `1`, Left  | Cycle menu selection         |
+| B      | `X`, `2`, Down  | Confirm selected item        |
+| C      | `C`, `3`, Right | Cancel / back                |
+
+`Esc` quits. Pass a pack folder as the first argument to load a different pack.
+
+Saves live in `%APPDATA%\vpet\vpet\<pack id>.sav` (a readable text file).
+Delete it to start over with a new egg.
+
+## Testing
+
+`vpet_snapshot` plays a scripted session headlessly with a fake clock, checks
+the care rules, and writes screenshots. It exits non-zero if a check fails.
+
+```bash
+./build/vpet_snapshot.exe packs/demo build/shots
+```
+
+## Legal
+
+This project is not affiliated with or endorsed by any toy or media company.
+Packs containing third-party content must be obtained and used by players
+themselves and are excluded from this repository by `.gitignore`.

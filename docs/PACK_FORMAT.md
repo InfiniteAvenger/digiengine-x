@@ -1,0 +1,178 @@
+# Pack format (format 1)
+
+A pack is a folder containing `pack.json` plus the sprite files it references.
+Drop it into `packs/` and point the game at it.
+
+```
+packs/my_pack/
+  pack.json
+  sprites/
+    egg.spr
+    blob.spr
+```
+
+## pack.json
+
+```json
+{
+  "format": 1,
+  "id": "demo",
+  "name": "Demo Pack",
+  "version": "0.1.0",
+  "author": "you",
+  "license": "CC0-1.0",
+  "theme": { "bg_top": "9bd4ff", "bg_bottom": "6bbf59",
+             "ui": "1a1c2c", "ui_text": "f4f4f4", "accent": "ffcd75" },
+  "rosters": [
+    { "id": "demo_v1", "name": "Demo Ver.1", "eggs": ["pixegg"] }
+  ],
+  "species": [
+    { "id": "pixegg", "name": "Pixegg", "stage": "egg",
+      "sprite": "sprites/pixegg.spr",
+      "evolve": [ { "to": "blip", "after_minutes": 0.5 } ] }
+  ]
+}
+```
+
+| Field                 | Meaning                                                  |
+|-----------------------|----------------------------------------------------------|
+| `format`              | Must be `1`.                                             |
+| `theme`               | Hex `rrggbb` colors for the home screen and menus.       |
+| `rosters`             | Selectable "device versions". `eggs` lists starter IDs.  |
+| `species[].stage`     | `egg`, `baby`, `baby2`, `child`, `adult`, `perfect`, `ultimate` |
+| `species[].sprite`    | Path to a sprite file, relative to the pack folder.      |
+| `species[].evolve`    | Rules checked in order; the first one that passes wins.  |
+| `evolve[].after_minutes` | Time spent in the current stage before evolving.     |
+| `species[].care`      | Optional. How fast needs change; see below.              |
+
+### care
+
+Every field is optional; missing ones use the defaults for the species' stage.
+
+| Field              | Meaning                                         | Child default |
+|--------------------|-------------------------------------------------|---------------|
+| `hunger_minutes`   | Awake minutes per hunger heart lost             | 48            |
+| `strength_minutes` | Awake minutes per strength heart lost           | 48            |
+| `poop_minutes`     | Awake minutes between poops                     | 120           |
+| `sleep`, `wake`    | Local bedtime and wake time, `"HH:MM"`. Equal values mean the creature never sleeps. | 21:00 / 08:00 |
+| `weight`           | Base and minimum weight in grams                | 20            |
+
+Stage defaults (hunger / strength / poop minutes, bedtime, weight):
+
+| Stage    | Needs (min) | Bedtime     | Weight |
+|----------|-------------|-------------|--------|
+| baby     | 3 / 3 / 3   | 20:00-09:00 | 5      |
+| baby2    | 30 / 30 / 60 | 20:00-09:00 | 10    |
+| child    | 48 / 48 / 120 | 21:00-08:00 | 20   |
+| adult    | 59 / 59 / 120 | 22:00-08:00 | 30   |
+| perfect  | 66 / 66 / 120 | 23:00-09:00 | 40   |
+| ultimate | 75 / 75 / 120 | 23:00-09:00 | 50   |
+
+### Combat fields on a species
+
+```json
+"stats":  { "hp": 20, "atk": 5, "def": 4, "spd": 5 },
+"learns": [ { "move": "tackle", "level": 1 }, { "move": "bubble", "level": 2 } ]
+```
+
+Stats are level-1 values and grow 10% per level. Missing stats use stage
+defaults. The three most recently learned moves are equipped.
+
+## moves
+
+```json
+{ "id": "tackle", "name": "TACKLE", "power": 10, "game": "timing" }
+```
+
+`game` picks the charge minigame when the player uses it: `timing` (stop the
+meter in the gold zone), `mash` (press A/B fast), `sequence` (repeat 4 buttons)
+or `dice` (roll for luck). Each gives a multiplier of about x0.5 to x1.5.
+Enemies use moves too; for them `game` is ignored.
+
+## enemies
+
+```json
+{ "id": "cogbot", "name": "COGBOT", "sprite": "sprites/cogbot.spr", "boss": false,
+  "stats": { "hp": 22, "atk": 4, "def": 5, "spd": 3 },
+  "moves": ["gear_toss"],
+  "drops": [ { "item": "scrap", "chance": 0.6 } ] }
+```
+
+Stats are for floor 1 and grow 15% per floor. Every 10th floor uses a `boss`
+enemy (with +50% HP). Drop chances rise 2% per floor. Make drops fit the
+creature: beasts drop meat and hide, machines drop scrap and circuits, plants
+drop vines and seeds.
+
+## materials and items
+
+Two lists sharing one id space. Materials are ingredients only; items are used.
+
+```json
+"materials": [ { "id": "berry", "name": "BERRY", "rarity": "common", "info": "SWEET GARDEN BERRY." } ],
+"items":     [ { "id": "patch", "name": "PATCH", "rarity": "common", "info": "HEALS 30% HP.",
+                 "effect": { "heal": 30 } } ]
+```
+
+`rarity`: `common`, `uncommon`, `rare`, `epic`. `icon` is a frame number in
+the pack's icon sheet, set at the top level with
+`"item_icons": "sprites/items.spr"` (a sprite file of 8x8 frames). Items
+without an icon just show their name. `effect` fields:
+
+| Field                     | Where  | Meaning                               |
+|---------------------------|--------|---------------------------------------|
+| `hunger`, `strength`      | home   | Hearts added                          |
+| `cure`                    | home   | `true` cures sickness                 |
+| `hp`, `atk`, `def`, `spd` | home   | Permanent stat bonus (chips)          |
+| `heal`                    | quest  | Percent of max HP restored            |
+| `atk_buff`, `def_buff`    | quest  | Floors of +25% attack / defense       |
+
+## recipes
+
+```json
+{ "makes": "berry_jam", "count": 1, "needs": { "berry": 3 } }
+```
+
+## crops
+
+```json
+{ "name": "BERRY BUSH", "seed": "data_seed", "yields": "berry", "count": 3,
+  "minutes": 20, "sprite": "sprites/crop_berry.spr" }
+```
+
+Crop sprites are 12x12 with exactly 4 frames: planted, sprout, growing, ripe.
+Harvesting has a 50% chance to return a seed.
+
+## start_items
+
+```json
+"start_items": { "data_seed": 3, "patch": 2 }
+```
+
+Given to every new egg.
+
+Unknown fields are ignored, so packs can add fields for future features early.
+
+## Sprite files (.spr)
+
+A plain-text, diff-friendly format. PNG sprite sheets will be supported by the
+baker tool later; `.spr` stays available for hand-made and generated art.
+
+```
+# Lines starting with # are comments.
+size 16 16
+palette
+k 1a1c2c
+w f4f4f4
+frame
+................
+......kkkk......
+...(16 rows of 16 characters)...
+frame
+...(next animation frame)...
+```
+
+- `size W H`: frame size in pixels. Creatures are 16x16.
+- `palette`: one entry per line, a single character then a hex color.
+  `.` is always transparent and `#` is reserved, so neither can be listed.
+- `frame`: followed by exactly `H` rows of exactly `W` palette characters.
+  Repeat for each animation frame. Frame 0 and 1 are the idle animation.

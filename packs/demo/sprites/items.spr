@@ -1,0 +1,305 @@
+# Item and material icons - demo pack. CC0.
+# One 8x8 frame per item; pack.json items refer to frames by "icon".
+size 8 8
+palette
+k 1a1c2c
+w f4f4f4
+r e04050
+o b86f50
+l e4a672
+y ffcd75
+g 38b764
+G a7f070
+b 41a6f6
+s 94b0c2
+p 7b4fb0
+n 8b5a2b
+O ef7d57
+frame # 0 raw meat
+...kkk..
+..krrrk.
+.krrwrrk
+.krrrrrk
+..krrrk.
+..kwk...
+.kwk....
+.kk.....
+frame # 1 hide
+.k....k.
+kokkkkok
+.koooolk
+.kollook
+.koooolk
+kooooook
+kokkkkok
+.k....k.
+frame # 2 scrap
+........
+..kkk...
+.kssk.k.
+.kswskk.
+..kssk..
+.kk.kssk
+kssk.kk.
+.kk.....
+frame # 3 wire
+........
+..oooo..
+.o....o.
+.o.oo.o.
+.o.o..o.
+.o..oo..
+..o.....
+...oooo.
+frame # 4 salt
+...kk...
+..kssk..
+..kwwk..
+.kwwwwk.
+.kwkwwk.
+.kwwwwk.
+.kwwwwk.
+..kkkk..
+frame # 5 vine
+.....gg.
+....g..g
+...g....
+..gG....
+..g.....
+.gGg....
+g...g...
+g....gg.
+frame # 6 data seed
+........
+...kk...
+..kbbk..
+.kbwbbk.
+.kbbbbk.
+.kbbbbk.
+..kbbk..
+...kk...
+frame # 7 berry
+....g...
+...ggg..
+..krrrk.
+.krwrrrk
+.krrrrrk
+.krrrrrk
+..krrrk.
+...kkk..
+frame # 8 gear
+...ss...
+.s.ss.s.
+..ssss..
+sss..sss
+sss..sss
+..ssss..
+.s.ss.s.
+...ss...
+frame # 9 circuit
+kkkkkkkk
+kgygggyk
+kgyyygyk
+kgggyggk
+kyyyyggk
+kggyggyk
+kgyyyyyk
+kkkkkkkk
+frame # 10 herb seed
+........
+...kk...
+..kggk..
+.kgGggk.
+.kggggk.
+.kggggk.
+..kggk..
+...kk...
+frame # 11 herb
+.....kk.
+...kkGk.
+..kGGgk.
+.kGGggk.
+.kGggk..
+..kggk..
+.k.kk...
+k.......
+frame # 12 power cell
+...kk...
+..kssk..
+.kyyyyk.
+.kyywyk.
+.kyyyyk.
+.kbbbbk.
+.kbbbbk.
+.kkkkkk.
+frame # 13 glow seed
+........
+...kk...
+..kyyk..
+.kywyyk.
+.kyyyyk.
+.kyyyyk.
+..kyyk..
+...kk...
+frame # 14 glow root
+...gg...
+..g..g..
+...yy...
+..yyyy..
+..ywyy..
+..yyyy..
+...yy...
+....y...
+frame # 15 core shard
+...kk...
+..kwpk..
+.kwppk..
+.kpppk..
+.kppppk.
+..kppk..
+..kpk...
+...k....
+frame # 16 berry jam
+..kkkk..
+..kssk..
+.kkkkkk.
+.krrrrk.
+.krwrrk.
+.krrrrk.
+.krrrrk.
+..kkkk..
+frame # 17 herb tea
+..g.g...
+...g....
+kkkkkk..
+kGGGGkk.
+kGGGGk.k
+kGGGGkk.
+.kGGk...
+..kk....
+frame # 18 steak
+........
+..kkkk..
+.knnnnk.
+knlnnnnk
+knnnnwnk
+knnnnnnk
+.knnnnk.
+..kkkk..
+frame # 19 smoothie
+.....k..
+....k...
+.kkkkkk.
+.krrrrk.
+.krwrrk.
+..krrk..
+..krrk..
+..kkkk..
+frame # 20 power bento
+kkkkkkkk
+kwwwkrrk
+kwwwkrrk
+kkkkkkkk
+kggknnnk
+kggknnnk
+kkkkkkkk
+........
+frame # 21 patch
+........
+.kkkkkk.
+kllwwllk
+klwllwlk
+klwllwlk
+kllwwllk
+.kkkkkk.
+........
+frame # 22 big patch
+.kkkkkk.
+kwwwwwwk
+kwwrrwwk
+kwrrrrwk
+kwrrrrwk
+kwwrrwwk
+kwwwwwwk
+.kkkkkk.
+frame # 23 overclock
+....kk..
+...kyk..
+..kyk...
+.kyyyyk.
+..kkyk..
+...kyk..
+...kk...
+...k....
+frame # 24 firewall
+.kkkkkk.
+kbbbbbbk
+kbwbbbbk
+kbbbbbbk
+kbbbbbbk
+.kbbbbk.
+..kbbk..
+...kk...
+frame # 25 glow stew
+..y..y..
+...y....
+........
+kkkkkkkk
+kyyyyyyk
+kyywyyyk
+.kyyyyk.
+..kkkk..
+frame # 26 hp chip
+.k.kk.k.
+kkkkkkkk
+.krrrrk.
+kkrwrrkk
+.krrrrk.
+kkrrrrkk
+.kkkkkk.
+.k.kk.k.
+frame # 27 atk chip
+.k.kk.k.
+kkkkkkkk
+.kOOOOk.
+kkOwOOkk
+.kOOOOk.
+kkOOOOkk
+.kkkkkk.
+.k.kk.k.
+frame # 28 def chip
+.k.kk.k.
+kkkkkkkk
+.kbbbbk.
+kkbwbbkk
+.kbbbbk.
+kkbbbbkk
+.kkkkkk.
+.k.kk.k.
+frame # 29 spd chip
+.k.kk.k.
+kkkkkkkk
+.kggggk.
+kkgwggkk
+.kggggk.
+kkggggkk
+.kkkkkk.
+.k.kk.k.
+frame # 30 core chip
+.k.kk.k.
+kkkkkkkk
+.kppppk.
+kkpwppkk
+.kppppk.
+kkppppkk
+.kkkkkk.
+.k.kk.k.
+frame # 31 debug kit
+kkkkkkk.
+kpwwwpkk
+kpwwwppk
+kppppppk
+kpkkkkpk
+kpksskpk
+kpksskpk
+kkkkkkkk

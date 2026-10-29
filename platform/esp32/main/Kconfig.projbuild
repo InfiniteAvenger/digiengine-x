@@ -1,0 +1,36 @@
+menu "vpet board"
+
+    choice VPET_BOARD_REV
+        prompt "Waveshare ESP32-S3-LCD-1.69 revision"
+        default VPET_BOARD_REV_V2
+        help
+            The power latch, PWR button and buzzer moved between revisions.
+            The revision is printed on the back of the board.
+
+        config VPET_BOARD_REV_V1
+            bool "V1 (latch GPIO35, PWR GPIO36, buzzer GPIO33)"
+        config VPET_BOARD_REV_V2
+            bool "V2 (latch GPIO41, PWR GPIO40, buzzer GPIO42)"
+    endchoice
+
+    config VPET_PIN_BTN_A
+        int "Button A GPIO"
+        range 0 48
+        default 0
+        help
+            Default is the onboard BOOT button. Holding it while plugging in
+            USB enters download mode, which is harmless.
+
+    config VPET_PIN_BTN_B
+        int "Button B GPIO (-1 = onboard PWR button)"
+        range -1 48
+        default -1
+
+    config VPET_PIN_BTN_C
+        int "Button C GPIO"
+        range 0 48
+        default 18
+        help
+            External tactile button wired between this pin and GND.
+
+endmenu

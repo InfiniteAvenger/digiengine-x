@@ -1,0 +1,379 @@
+#include "vpet/pack.h"
+#include "vpet/json.h"
+#include "vpet/platform.h"
+
+namespace vpet {
+
+namespace {
+constexpr const char* kStageNames[] = {"egg", "baby", "baby2", "child", "adult", "perfect", "ultimate"};
+constexpr const char* kRarityNames[] = {"common", "uncommon", "rare", "epic"};
+constexpr const char* kGameNames[] = {"timing", "mash", "sequence", "dice"};
+
+template <size_t N>
+int index_of(const char* const (&names)[N], const std::string& s) {
+    for (size_t i = 0; i < N; ++i)
+        if (s == names[i]) return int(i);
+    return -1;
+}
+
+void read_theme_color(const Json& theme, const char* key, Color& out) {
+    Color c;
+    if (parse_hex_color(theme[key].str_or(""), c)) out = c;
+}
+
+// "HH:MM" -> minutes after midnight.
+bool parse_clock(const std::string& s, uint16_t& out) {
+    if (s.size() != 5 || s[2] != ':') return false;
+    for (int i : {0, 1, 3, 4})
+        if (s[i] < '0' || s[i] > '9') return false;
+    int h = (s[0] - '0') * 10 + (s[1] - '0'), m = (s[3] - '0') * 10 + (s[4] - '0');
+    if (h > 23 || m > 59) return false;
+    out = uint16_t(h * 60 + m);
+    return true;
+}
+
+bool read_care(const Json& j, Care& care, std::string& err) {
+    auto minutes = [&](const char* key, uint32_t& out) {
+        double v = j[key].num_or(-1);
+        if (v > 0) out = uint32_t(v * 60.0);
+    };
+    minutes("hunger_minutes", care.hunger_s);
+    minutes("strength_minutes", care.strength_s);
+    minutes("poop_minutes", care.poop_s);
+    care.weight = uint16_t(j["weight"].int_or(care.weight));
+    for (auto [key, out] : {std::pair<const char*, uint16_t*>{"sleep", &care.sleep_min}, {"wake", &care.wake_min}}) {
+        if (j[key].is_null()) continue;
+        if (!parse_clock(j[key].str_or(""), *out)) {
+            err = std::string("care.") + key + " must look like \"21:00\"";
+            return false;
+        }
+    }
+    return true;
+}
+
+void read_stats(const Json& j, Stats& s) {
+    s.hp = j["hp"].int_or(s.hp);
+    s.atk = j["atk"].int_or(s.atk);
+    s.def = j["def"].int_or(s.def);
+    s.spd = j["spd"].int_or(s.spd);
+}
+
+void read_effect(const Json& j, Effect& e) {
+    e.hunger = j["hunger"].int_or(0);
+    e.strength = j["strength"].int_or(0);
+    e.cure = j["cure"].bool_or(false);
+    read_stats(j, e.bonus);
+    e.heal = j["heal"].int_or(0);
+    e.atk_buff = j["atk_buff"].int_or(0);
+    e.def_buff = j["def_buff"].int_or(0);
+}
+
+bool load_sprite_file(Platform& platform, const std::string& dir, const std::string& rel, Sprite& out,
+                      std::string& err) {
+    std::string path = dir + "/" + rel, text;
+    if (!platform.read_file(path, text)) {
+        err = "cannot read " + path;
+        return false;
+    }
+    if (!parse_sprite(text, out, err)) {
+        err = path + " " + err;
+        return false;
+    }
+    return true;
+}
+
+// Resolves an item id, reporting `where` on failure.
+bool item_ref(const Pack& pack, const std::string& id, const std::string& where, int& out, std::string& err) {
+    out = pack.find_item(id);
+    if (out < 0) err = where + ": unknown item '" + id + "'";
+    return out >= 0;
+}
+
+bool load_items(const Json& list, bool material, Pack& out, std::string& err) {
+    for (size_t i = 0; i < list.size(); ++i) {
+        const Json& j = list[i];
+        ItemDef it;
+        it.id = j["id"].str_or("");
+        it.name = j["name"].str_or(it.id);
+        it.info = j["info"].str_or("");
+        it.material = material;
+        if (it.id.empty() || out.find_item(it.id) >= 0) {
+            err = "item '" + it.id + "': missing or duplicate id";
+            return false;
+        }
+        int r = index_of(kRarityNames, j["rarity"].str_or("common"));
+        if (r < 0) {
+            err = it.id + ": rarity must be common, uncommon, rare or epic";
+            return false;
+        }
+        it.rarity = Rarity(r);
+        read_effect(j["effect"], it.effect);
+        it.icon = j["icon"].int_or(-1);
+        out.items.push_back(std::move(it));
+    }
+    return true;
+}
+}  // namespace
+
+const char* stage_name(Stage s) { return kStageNames[int(s)]; }
+const char* rarity_name(Rarity r) { return kRarityNames[int(r)]; }
+const char* minigame_name(MiniGame g) { return kGameNames[int(g)]; }
+
+Care default_care(Stage s) {
+    //                 hunger  strength  poop    sleep    wake    weight
+    switch (s) {
+        case Stage::Egg:      return {0, 0, 0, 0, 0, 0};
+        case Stage::Baby:     return {3 * 60, 3 * 60, 3 * 60, 20 * 60, 9 * 60, 5};
+        case Stage::Baby2:    return {30 * 60, 30 * 60, 60 * 60, 20 * 60, 9 * 60, 10};
+        case Stage::Child:    return {48 * 60, 48 * 60, 120 * 60, 21 * 60, 8 * 60, 20};
+        case Stage::Adult:    return {59 * 60, 59 * 60, 120 * 60, 22 * 60, 8 * 60, 30};
+        case Stage::Perfect:  return {66 * 60, 66 * 60, 120 * 60, 23 * 60, 9 * 60, 40};
+        case Stage::Ultimate: return {75 * 60, 75 * 60, 120 * 60, 23 * 60, 9 * 60, 50};
+    }
+    return {};
+}
+
+Stats default_stats(Stage s) {
+    switch (s) {
+        case Stage::Egg:      return {1, 1, 1, 1};
+        case Stage::Baby:     return {20, 5, 4, 5};
+        case Stage::Baby2:    return {30, 8, 6, 6};
+        case Stage::Child:    return {45, 12, 9, 9};
+        case Stage::Adult:    return {70, 18, 14, 12};
+        case Stage::Perfect:  return {100, 26, 20, 16};
+        case Stage::Ultimate: return {140, 36, 28, 20};
+    }
+    return {};
+}
+
+bool parse_stage(const std::string& s, Stage& out) {
+    int i = index_of(kStageNames, s);
+    if (i >= 0) out = Stage(i);
+    return i >= 0;
+}
+
+int Pack::find_species(const std::string& id) const {
+    for (size_t i = 0; i < species.size(); ++i)
+        if (species[i].id == id) return int(i);
+    return -1;
+}
+
+int Pack::find_item(const std::string& id) const {
+    for (size_t i = 0; i < items.size(); ++i)
+        if (items[i].id == id) return int(i);
+    return -1;
+}
+
+int Pack::find_move(const std::string& id) const {
+    for (size_t i = 0; i < moves.size(); ++i)
+        if (moves[i].id == id) return int(i);
+    return -1;
+}
+
+bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::string& err) {
+    out = Pack{};
+    std::string text;
+    if (!platform.read_file(dir + "/pack.json", text)) {
+        err = "cannot read " + dir + "/pack.json";
+        return false;
+    }
+    Json root;
+    if (!Json::parse(text, root, err)) return false;
+    if (root["format"].int_or(0) != 1) {
+        err = "pack.json: unsupported format (expected 1)";
+        return false;
+    }
+
+    out.id = root["id"].str_or("");
+    if (out.id.empty()) {
+        err = "pack.json: missing \"id\"";
+        return false;
+    }
+    out.name = root["name"].str_or(out.id);
+    out.version = root["version"].str_or("");
+    out.author = root["author"].str_or("");
+    out.license = root["license"].str_or("");
+
+    const Json& theme = root["theme"];
+    read_theme_color(theme, "bg_top", out.theme.bg_top);
+    read_theme_color(theme, "bg_bottom", out.theme.bg_bottom);
+    read_theme_color(theme, "ui", out.theme.ui);
+    read_theme_color(theme, "ui_text", out.theme.ui_text);
+    read_theme_color(theme, "accent", out.theme.accent);
+
+    // Items and moves first: everything else refers to them by id.
+    if (!load_items(root["materials"], true, out, err) || !load_items(root["items"], false, out, err)) return false;
+    if (!root["item_icons"].is_null()) {
+        if (!load_sprite_file(platform, dir, root["item_icons"].str_or(""), out.item_icons, err)) return false;
+        for (const ItemDef& it : out.items)
+            if (it.icon >= out.item_icons.frames) {
+                err = it.id + ": icon " + std::to_string(it.icon) + " is past the end of item_icons";
+                return false;
+            }
+    }
+
+    const Json& moves = root["moves"];
+    for (size_t i = 0; i < moves.size(); ++i) {
+        Move m;
+        m.id = moves[i]["id"].str_or("");
+        m.name = moves[i]["name"].str_or(m.id);
+        m.power = moves[i]["power"].int_or(10);
+        int g = index_of(kGameNames, moves[i]["game"].str_or("timing"));
+        if (m.id.empty() || g < 0) {
+            err = "move '" + m.id + "': missing id or unknown game (timing, mash, sequence, dice)";
+            return false;
+        }
+        m.game = MiniGame(g);
+        out.moves.push_back(std::move(m));
+    }
+    auto move_ref = [&](const std::string& id, const std::string& where, int& idx) {
+        idx = out.find_move(id);
+        if (idx < 0) err = where + ": unknown move '" + id + "'";
+        return idx >= 0;
+    };
+
+    // Pass 1: species and sprites. Evolution targets are resolved after,
+    // because a rule can point at a species defined later in the file.
+    const Json& species = root["species"];
+    for (size_t i = 0; i < species.size(); ++i) {
+        const Json& js = species[i];
+        Species s;
+        s.id = js["id"].str_or("");
+        s.name = js["name"].str_or(s.id);
+        if (s.id.empty()) {
+            err = "species #" + std::to_string(i) + " has no id";
+            return false;
+        }
+        if (out.find_species(s.id) >= 0) {
+            err = "duplicate species id '" + s.id + "'";
+            return false;
+        }
+        if (!parse_stage(js["stage"].str_or(""), s.stage)) {
+            err = s.id + ": unknown stage '" + js["stage"].str_or("") + "'";
+            return false;
+        }
+        s.care = default_care(s.stage);
+        if (!read_care(js["care"], s.care, err)) {
+            err = s.id + ": " + err;
+            return false;
+        }
+        s.stats = default_stats(s.stage);
+        read_stats(js["stats"], s.stats);
+        const Json& learns = js["learns"];
+        for (size_t l = 0; l < learns.size(); ++l) {
+            LearnRule rule;
+            rule.level = learns[l]["level"].int_or(1);
+            if (!move_ref(learns[l]["move"].str_or(""), s.id, rule.move)) return false;
+            s.learns.push_back(rule);
+        }
+        if (!load_sprite_file(platform, dir, js["sprite"].str_or(""), s.sprite, err)) return false;
+        out.species.push_back(std::move(s));
+    }
+
+    for (size_t i = 0; i < species.size(); ++i) {
+        const Json& rules = species[i]["evolve"];
+        for (size_t r = 0; r < rules.size(); ++r) {
+            EvolveRule rule;
+            std::string to = rules[r]["to"].str_or("");
+            rule.to = out.find_species(to);
+            if (rule.to < 0) {
+                err = out.species[i].id + ": evolves to unknown species '" + to + "'";
+                return false;
+            }
+            rule.after_seconds = uint32_t(rules[r]["after_minutes"].num_or(0) * 60.0);
+            out.species[i].evolve.push_back(rule);
+        }
+    }
+
+    const Json& rosters = root["rosters"];
+    for (size_t i = 0; i < rosters.size(); ++i) {
+        Roster ro;
+        ro.id = rosters[i]["id"].str_or("");
+        ro.name = rosters[i]["name"].str_or(ro.id);
+        const Json& eggs = rosters[i]["eggs"];
+        for (size_t e = 0; e < eggs.size(); ++e) {
+            int idx = out.find_species(eggs[e].str_or(""));
+            if (idx < 0) {
+                err = "roster " + ro.id + ": unknown egg '" + eggs[e].str_or("") + "'";
+                return false;
+            }
+            ro.eggs.push_back(idx);
+        }
+        out.rosters.push_back(std::move(ro));
+    }
+
+    const Json& enemies = root["enemies"];
+    for (size_t i = 0; i < enemies.size(); ++i) {
+        const Json& je = enemies[i];
+        Enemy e;
+        e.id = je["id"].str_or("");
+        e.name = je["name"].str_or(e.id);
+        e.boss = je["boss"].bool_or(false);
+        e.stats = default_stats(Stage::Baby);
+        read_stats(je["stats"], e.stats);
+        for (size_t m = 0; m < je["moves"].size(); ++m) {
+            int idx;
+            if (!move_ref(je["moves"][m].str_or(""), e.id, idx)) return false;
+            e.moves.push_back(idx);
+        }
+        if (e.moves.empty()) {
+            err = e.id + ": enemies need at least one move";
+            return false;
+        }
+        for (size_t d = 0; d < je["drops"].size(); ++d) {
+            Drop drop;
+            if (!item_ref(out, je["drops"][d]["item"].str_or(""), e.id, drop.item, err)) return false;
+            drop.chance = float(je["drops"][d]["chance"].num_or(0));
+            e.drops.push_back(drop);
+        }
+        if (!load_sprite_file(platform, dir, je["sprite"].str_or(""), e.sprite, err)) return false;
+        out.enemies.push_back(std::move(e));
+    }
+
+    const Json& crops = root["crops"];
+    for (size_t i = 0; i < crops.size(); ++i) {
+        const Json& jc = crops[i];
+        Crop c;
+        c.name = jc["name"].str_or("");
+        if (!item_ref(out, jc["seed"].str_or(""), "crop " + c.name, c.seed, err) ||
+            !item_ref(out, jc["yields"].str_or(""), "crop " + c.name, c.yields, err))
+            return false;
+        c.count = jc["count"].int_or(1);
+        c.grow_s = uint32_t(jc["minutes"].num_or(30) * 60.0);
+        if (!load_sprite_file(platform, dir, jc["sprite"].str_or(""), c.sprite, err)) return false;
+        if (c.sprite.frames != 4) {
+            err = "crop " + c.name + ": sprite needs exactly 4 frames";
+            return false;
+        }
+        out.crops.push_back(std::move(c));
+    }
+
+    // {"item_id": count, ...} -> (index, count) pairs
+    auto amounts = [&](const Json& obj, const std::string& where, std::vector<std::pair<int, int>>& list) {
+        for (size_t n = 0; n < obj.size(); ++n) {
+            int idx;
+            if (!item_ref(out, obj.key(n), where, idx, err)) return false;
+            list.push_back({idx, obj[n].int_or(1)});
+        }
+        return true;
+    };
+
+    const Json& recipes = root["recipes"];
+    for (size_t i = 0; i < recipes.size(); ++i) {
+        Recipe r;
+        if (!item_ref(out, recipes[i]["makes"].str_or(""), "recipe", r.makes, err)) return false;
+        r.count = recipes[i]["count"].int_or(1);
+        if (!amounts(recipes[i]["needs"], "recipe " + out.items[r.makes].id, r.needs)) return false;
+        out.recipes.push_back(std::move(r));
+    }
+
+    if (!amounts(root["start_items"], "start_items", out.start_items)) return false;
+
+    if (out.rosters.empty() || out.rosters[0].eggs.empty()) {
+        err = "pack needs at least one roster with an egg";
+        return false;
+    }
+    return true;
+}
+
+}  // namespace vpet
