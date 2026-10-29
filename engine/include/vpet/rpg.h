@@ -18,8 +18,13 @@ Stats pet_stats(const Pack& pack, const Pet& pet);
 uint32_t xp_to_next(int level);
 // Adds XP, applying level-ups. Appends a message per level and new move.
 void gain_xp(const Pack& pack, Pet& pet, uint32_t xp, std::vector<std::string>& msgs);
-// The newest moves learned at the current level, up to kMaxEquippedMoves.
+// Every move the current form knows at its level, oldest first.
+std::vector<int> learned_moves(const Pack& pack, const Pet& pet);
+// The player's picks (pet.moves) if any are still known, else the newest
+// three learned.
 std::vector<int> equipped_moves(const Pack& pack, const Pet& pet);
+// Equips or unequips a learned move (1 to 3 equipped). `msg` says what happened.
+bool toggle_move(const Pack& pack, Pet& pet, int move, std::string& msg);
 
 // --- Items --------------------------------------------------------------------
 

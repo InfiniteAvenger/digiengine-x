@@ -19,6 +19,8 @@ public:
     virtual void on_press(Button) {}
     virtual void update(uint64_t /*now_ms*/) {}
     virtual void draw(Framebuffer& fb) = 0;
+    // Settings screens return true so the A+C hotkey doesn't stack them.
+    virtual bool is_settings() const { return false; }
 
 protected:
     Game& game_;
@@ -28,9 +30,25 @@ class Game {
 public:
     explicit Game(Platform& platform) : platform_(platform) {}
 
-    // Loads the pack and starts the home screen. On failure the error is
-    // shown on screen by frame().
-    bool init(const std::string& pack_dir);
+    // `root` is either one pack folder (with pack.json) or a folder of pack
+    // folders. Opens the last-used pack and starts the home screen. On failure
+    // the error is shown on screen by frame().
+    bool init(const std::string& root);
+
+    // Installed packs (folder paths and display names) and the open one.
+    const std::vector<std::string>& pack_names() const { return pack_names_; }
+    int pack_index() const { return pack_index_; }
+    // Saves, then switches packs at the end of this frame (each pack keeps
+    // its own save).
+    void request_pack(int index) { pending_pack_ = index; }
+
+    // The version (roster) new eggs hatch from.
+    int roster_index() const;
+    void set_roster(int index);
+
+    // Hold A+C this long to open settings from any screen.
+    static constexpr uint64_t kSettingsHoldMs = 3000;
+    bool settings_open() const { return !stack_.empty() && stack_.back()->is_settings(); }
     // Runs one frame: input, simulation, draw, present. Call 30-60x a second.
     void frame();
     // Writes the pet to its save slot. Also called automatically.
@@ -72,12 +90,18 @@ public:
 
 private:
     void draw_error();
+    bool open_pack(int index);
+    void handle_settings_hotkey(uint8_t held);
 
     Platform& platform_;
     Framebuffer fb_;
     Pack pack_;
     Save save_;
-    int roster_ = 0;
+    std::vector<std::string> pack_dirs_, pack_names_;
+    int pack_index_ = 0;
+    int pending_pack_ = -1;
+    uint64_t combo_since_ = 0;  // when A+C started being held together
+    bool combo_used_ = false;   // settings already opened by this hold
     std::vector<std::unique_ptr<Scene>> stack_;
     int pending_pops_ = 0;
     std::string error_;

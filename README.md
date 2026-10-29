@@ -37,7 +37,12 @@ cmake --build build
 | B      | `X`, `2`, Down  | Confirm selected item        |
 | C      | `C`, `3`, Right | Cancel / back                |
 
-`Esc` quits. Pass a pack folder as the first argument to load a different pack.
+`Esc` quits. **Hold A+C for 3 seconds** on any screen to open settings: switch
+packs and versions, pick equipped moves, and see pack info.
+
+Every folder in `packs/` with a `pack.json` is a pack. Put your own packs there
+(they stay out of git) and they are copied next to the game when it builds.
+Pass a folder as the first argument to load packs from somewhere else.
 
 Saves live in `%APPDATA%\vpet\vpet\<pack id>.sav` (a readable text file).
 Delete it to start over with a new egg.

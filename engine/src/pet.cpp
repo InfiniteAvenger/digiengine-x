@@ -1,4 +1,5 @@
 #include "vpet/pet.h"
+#include <algorithm>
 #include <cstdlib>
 #include <map>
 #include <sstream>
@@ -69,7 +70,8 @@ uint32_t tick(const Pack& pack, Pet& pet, uint64_t t, int32_t utc_offset_s) {
     }
 
     if (!pet.asleep) {
-        if (c.hunger_s && ++pet.hunger_s >= c.hunger_s) {
+        // Hunger drops half a heart at a time, at the same overall pace.
+        if (c.hunger_s && ++pet.hunger_s >= std::max<uint32_t>(1, c.hunger_s / 2)) {
             pet.hunger_s = 0;
             if (pet.hunger) --pet.hunger;
         }
@@ -161,7 +163,7 @@ void thaw(Pet& pet, uint64_t now_ms) {
 }
 
 bool feed_kibble(Pet& pet) {
-    if (pet.hunger >= kMaxHearts) return false;
+    if (pet.hunger >= kHungerHalves) return false;
     ++pet.hunger;
     ++pet.weight;
     pet.hunger_call = Call{};  // answered now rather than on the next tick
@@ -207,7 +209,7 @@ void write_pet(std::ostringstream& o, const Pack& pack, const Pet& p, const std:
     key("born") << p.born_ms << '\n';
     key("stage_since") << p.stage_ms << '\n';
     key("sim") << p.sim_ms << '\n';
-    key("hunger") << int(p.hunger) << '\n';
+    key("hunger_halves") << int(p.hunger) << '\n';
     key("strength") << int(p.strength) << '\n';
     key("poop") << int(p.poop) << '\n';
     key("weight") << p.weight << '\n';
@@ -229,6 +231,11 @@ void write_pet(std::ostringstream& o, const Pack& pack, const Pet& p, const std:
     key("run") << p.run.floor << ' ' << p.run.best << ' ' << p.run.hp << ' ' << p.run.atk_buff << ' ' << p.run.def_buff
                << '\n';
     if (p.frozen_ms) key("frozen") << p.frozen_ms << '\n';
+    if (!p.moves.empty()) {
+        key("moves");
+        for (size_t i = 0; i < p.moves.size(); ++i) o << (i ? "," : "") << pack.moves[p.moves[i]].id;
+        o << '\n';
+    }
 }
 
 bool read_pet(const Pack& pack, Fields& f, const std::string& prefix, Pet& out) {
@@ -255,7 +262,12 @@ bool read_pet(const Pack& pack, Fields& f, const std::string& prefix, Pet& out) 
     num("born", p.born_ms);
     num("stage_since", p.stage_ms);
     num("sim", p.sim_ms);
-    num("hunger", p.hunger);
+    if (f.count(prefix + "hunger_halves")) {
+        num("hunger_halves", p.hunger);
+    } else {  // older saves stored whole hearts
+        num("hunger", p.hunger);
+        p.hunger = uint8_t(p.hunger * 2);
+    }
     num("strength", p.strength);
     num("poop", p.poop);
     num("weight", p.weight);
@@ -276,8 +288,11 @@ bool read_pet(const Pack& pack, Fields& f, const std::string& prefix, Pet& out) 
     std::istringstream(get("bonus")) >> p.bonus.hp >> p.bonus.atk >> p.bonus.def >> p.bonus.spd;
     std::istringstream(get("run")) >> p.run.floor >> p.run.best >> p.run.hp >> p.run.atk_buff >> p.run.def_buff;
     num("frozen", p.frozen_ms);
+    std::stringstream moves(get("moves"));
+    for (std::string id; std::getline(moves, id, ',');)
+        if (int m = pack.find_move(id); m >= 0) p.moves.push_back(m);
 
-    if (p.hunger > kMaxHearts) p.hunger = kMaxHearts;
+    if (p.hunger > kHungerHalves) p.hunger = kHungerHalves;
     if (p.strength > kMaxHearts) p.strength = kMaxHearts;
     if (p.poop > kMaxPoop) p.poop = kMaxPoop;
     if (p.level < 1) p.level = 1;
@@ -290,6 +305,7 @@ bool read_pet(const Pack& pack, Fields& f, const std::string& prefix, Pet& out) 
 std::string write_save(const Pack& pack, const Save& s) {
     std::ostringstream o;
     o << "format 1\n";
+    if (!s.roster.empty()) o << "roster " << s.roster << '\n';
     write_pet(o, pack, s.active, "");
     for (int i = 0; i < kCryoSlots; ++i)
         if (s.cryo[i]) write_pet(o, pack, *s.cryo[i], "cryo" + std::to_string(i + 1) + ".");
@@ -319,6 +335,7 @@ bool read_save(const Pack& pack, const std::string& text, Save& out) {
 
     Save s;
     if (!read_pet(pack, f, "", s.active)) return false;
+    s.roster = f["roster"];
     for (int i = 0; i < kCryoSlots; ++i) {
         Pet p;
         std::string prefix = "cryo" + std::to_string(i + 1) + ".";

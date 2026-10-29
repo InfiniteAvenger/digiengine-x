@@ -63,7 +63,7 @@ private:
     void start_floor() {
         const Pack& pack = game_.pack();
         Pet& pet = game_.pet();
-        if (pet.hunger == 0) {
+        if (pet.hunger < 2) {
             game_.toast("TOO HUNGRY");
             game_.pop();
             return;
@@ -74,7 +74,7 @@ private:
             game_.pop();
             return;
         }
-        --pet.hunger;  // each floor costs a hunger heart
+        pet.hunger = uint8_t(pet.hunger - 2);  // each floor costs a full heart
         ps_ = pet_stats(pack, pet);
         if (pet.run.hp < 0 || pet.run.hp > ps_.hp) pet.run.hp = ps_.hp;
         EnemyPick pick = pick_enemy(pack, pet.run.floor, game_.rand());
@@ -283,7 +283,7 @@ void QuestScene::draw(Framebuffer& fb) {
     switch (phase_) {
         case Phase::Lobby:
             fb.draw_text(6, y, "HP " + std::to_string(hp) + "/" + std::to_string(ps.hp), t.ui_text);
-            fb.draw_text(6, y + 9, "EACH FLOOR COSTS 1 HUNGER", dim);
+            fb.draw_text(6, y + 9, "EACH FLOOR: 1 HUNGER HEART", dim);
             fb.draw_text(6, y + 18, "LOSE AND THE RUN RESETS", dim);
             draw_footer(fb, t, "B: ENTER  C: HOME");
             break;

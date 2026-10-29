@@ -2,6 +2,7 @@
 // clock, checks the pet's state along the way, and writes chosen frames as
 // 24-bit BMPs (scaled 4x). Exit code is the number of failed checks.
 //   vpet_snapshot <pack_dir> <out_dir>
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -46,6 +47,14 @@ public:
     bool write_save(const std::string& slot, const std::string& data) override {
         saves[slot] = data;
         return true;
+    }
+    std::vector<std::string> list_dirs(const std::string& path) override {
+        std::vector<std::string> names;
+        std::error_code ec;
+        for (const auto& e : std::filesystem::directory_iterator(path, ec))
+            if (e.is_directory()) names.push_back(e.path().filename().string());
+        std::sort(names.begin(), names.end());
+        return names;
     }
 };
 
@@ -338,6 +347,100 @@ void cryo_checks(const FakePlatform& base, const std::string& demo_dir) {
           "after passing on: a new egg, and the bag and cryo slots are kept");
 }
 
+// Settings hotkey, switching packs, versions, move swapping, old saves.
+void settings_checks(const FakePlatform& base, const std::string& demo_dir) {
+    std::printf("settings, packs and moves\n");
+    namespace fs = std::filesystem;
+
+    // A packs folder holding the demo and the baked CC0 sample.
+    std::string root = "build/test_packs/multi";
+    fs::remove_all(root);
+    fs::create_directories(root);
+    fs::copy(demo_dir, root + "/demo", fs::copy_options::recursive);
+    vpet::BakeReport rep;
+    vpet::bake_pack("tools/baker/sample", root + "/baker_sample", rep);
+
+    FakePlatform q;
+    q.clock = base.clock;
+    q.offset = base.offset;
+    auto g = std::make_unique<vpet::Game>(q);
+    auto run = [&](uint64_t ms) {
+        for (uint64_t t = 0; t < ms; t += 33) {
+            q.clock += 33;
+            g->frame();
+        }
+    };
+    check(g->init(root) && g->pack_names().size() == 2, "finds every pack folder in packs/");
+    check(g->pack().id == "baker_sample", "with no history, opens the first pack");
+
+    // Hotkey: hold A+C. 2.5 s is not enough; 3 s opens settings.
+    q.held = vpet::BTN_A | vpet::BTN_C;
+    run(2500);
+    bool early = g->settings_open();
+    run(600);
+    bool opened = g->settings_open();
+    q.held = 0;
+    run(100);
+    check(!early && opened, "holding A+C for 3 seconds opens settings, not sooner");
+    q.held = vpet::BTN_C;
+    run(66);
+    q.held = 0;
+    run(66);
+    check(!g->settings_open(), "C closes settings");
+
+    // Switch packs; each keeps its own save.
+    run(31'000);  // hatch the sample pack's egg
+    std::string sample_species = g->pack().species[g->pet().species].id;
+    g->request_pack(1);
+    run(66);
+    check(g->pack().id == "demo" && g->pack_index() == 1, "switching packs opens the other pack");
+    g->request_pack(0);
+    run(66);
+    check(g->pack().id == "baker_sample" && g->pack().species[g->pet().species].id == sample_species,
+          "switching back restores that pack's own pet");
+    g->request_pack(1);
+    run(66);
+    g = std::make_unique<vpet::Game>(q);
+    g->init(root);
+    check(g->pack().id == "demo", "the last pack used opens next time");
+
+    // Versions: the chosen roster is saved.
+    g->set_roster(0);
+    g->save();
+    g = std::make_unique<vpet::Game>(q);
+    g->init(root);
+    check(g->roster_index() == 0 && g->pack().rosters[0].id == "demo_v1", "the chosen version is remembered");
+
+    // Move swapping on a level-6 pet that knows four moves.
+    const vpet::Pack& pack = g->pack();
+    vpet::Pet pet = vpet::new_pet(pack, pack.find_species("blip"), q.clock);
+    pet.level = 6;
+    int tackle = pack.find_move("tackle"), bubble = pack.find_move("bubble"), zap = pack.find_move("zap_code"),
+        lucky = pack.find_move("lucky_roll");
+    std::string msg;
+    check(vpet::equipped_moves(pack, pet) == std::vector<int>{bubble, zap, lucky}, "by default the newest 3 moves are equipped");
+    check(!vpet::toggle_move(pack, pet, tackle, msg), "a 4th move can't be equipped");
+    vpet::toggle_move(pack, pet, lucky, msg);
+    vpet::toggle_move(pack, pet, tackle, msg);
+    check(vpet::equipped_moves(pack, pet) == std::vector<int>{bubble, zap, tackle}, "swapping a move out and another in");
+    vpet::toggle_move(pack, pet, bubble, msg);
+    vpet::toggle_move(pack, pet, zap, msg);
+    check(!vpet::toggle_move(pack, pet, tackle, msg) && vpet::equipped_moves(pack, pet).size() == 1,
+          "at least one move stays equipped");
+
+    vpet::Save s;
+    s.active = pet;
+    s.home = vpet::new_home(pack);
+    vpet::Save back;
+    check(vpet::read_save(pack, vpet::write_save(pack, s), back) && back.active.moves == pet.moves,
+          "equipped moves survive a save");
+
+    // A save from before half hearts stored whole hearts.
+    std::string legacy = "format 1\nspecies blip\nhunger 3\n";
+    vpet::Save old;
+    check(vpet::read_save(pack, legacy, old) && old.active.hunger == 6, "old whole-heart hunger loads as half hearts");
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -351,6 +454,7 @@ int main(int argc, char* argv[]) {
     evolution_checks(p, argv[1]);
     enemy_checks(p, argv[1]);
     cryo_checks(p, argv[1]);
+    settings_checks(p, argv[1]);
     auto game = std::make_unique<vpet::Game>(p);
     if (!game->init(argv[1])) return 1;
     std::string out = argv[2];
@@ -400,14 +504,14 @@ int main(int argc, char* argv[]) {
     press(vpet::BTN_B);
     run(500);
     shot("02b_eating");
-    check(pet().hunger == 1, "kibble adds one hunger heart");
+    check(pet().hunger == 1, "kibble adds half a heart");
     check(!pet().hunger_call.active(), "feeding answers the hunger call");
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < 8; ++i) {  // 7 more fill it; the 8th is refused
         press(vpet::BTN_B);
         press(vpet::BTN_B);
     }
-    check(pet().hunger == 4, "hunger caps at 4 hearts");
-    check(pet().weight == 9, "four kibble add 4g");
+    check(pet().hunger == vpet::kHungerHalves, "hunger caps at 4 hearts (8 halves)");
+    check(pet().weight == 13, "eight kibble add 8g");
 
     std::printf("minigame scoring\n");
     {
@@ -468,6 +572,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::printf("training\n");
+    uint16_t weight_before_training = pet().weight;
     select(2);
     press(vpet::BTN_B);
     run(1000);  // "READY" beat
@@ -475,7 +580,7 @@ int main(int argc, char* argv[]) {
     // Drill type is random; mashing B beats Speed Bag and ends the others.
     for (int i = 0; i < 24; ++i) press(vpet::BTN_B);
     run(3000);
-    check(pet().trainings == 1 && pet().weight == 8, "a drill counts as training and burns 1g");
+    check(pet().trainings == 1 && pet().weight == weight_before_training - 1, "a drill counts as training and burns 1g");
     check(pet().strength <= 1, "strength rises by at most one heart");
 
     std::printf("status\n");
@@ -584,7 +689,8 @@ int main(int argc, char* argv[]) {
     shot("14_items");
     int hunger_before = pet().hunger;
     press(vpet::BTN_B);  // eat the jam
-    check(vpet::count(game->home(), jam) == 0 && pet().hunger == std::min(4, hunger_before + 2), "berry jam adds 2 hunger");
+    check(vpet::count(game->home(), jam) == 0 && pet().hunger == std::min(int(vpet::kHungerHalves), hunger_before + 4),
+          "berry jam adds 2 hearts (4 halves)");
     press(vpet::BTN_C);
     press(vpet::BTN_C);
 
@@ -596,18 +702,18 @@ int main(int argc, char* argv[]) {
     press(vpet::BTN_B);
     press(vpet::BTN_A);
     press(vpet::BTN_B);  // medicine
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < 8; ++i) {
         select(1);
         press(vpet::BTN_B);
         press(vpet::BTN_B);  // kibble
     }
     pet().level = 6;  // test shortcut: know all four moves
-    check(!pet().sick && pet().hunger == 4, "healthy and fed before questing");
+    check(!pet().sick && pet().hunger == vpet::kHungerHalves, "healthy and fed before questing");
     select(3);
     press(vpet::BTN_B);
     shot("15_quest_lobby");
     press(vpet::BTN_B);  // enter floor 1
-    check(pet().hunger == 3, "entering a floor costs a hunger heart");
+    check(pet().hunger == vpet::kHungerHalves - 2, "entering a floor costs a full hunger heart");
     run(3000);           // intro messages auto-advance
     shot("16_battle_choose");
     press(vpet::BTN_B);  // BUBBLE: mash minigame
@@ -662,6 +768,19 @@ int main(int argc, char* argv[]) {
     shot("24_cryo_screen");
     press(vpet::BTN_B);
     shot("25_cryo_confirm");
+    press(vpet::BTN_C);
+    press(vpet::BTN_C);
+    p.held = vpet::BTN_A | vpet::BTN_C;
+    run(1500);
+    shot("26_settings_hold");
+    run(1700);
+    p.held = 0;
+    run(100);
+    shot("27_settings");
+    press(vpet::BTN_A);
+    press(vpet::BTN_A);
+    press(vpet::BTN_B);
+    shot("28_moves");
     press(vpet::BTN_C);
     press(vpet::BTN_C);
 

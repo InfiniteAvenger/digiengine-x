@@ -24,6 +24,7 @@ add_library(vpet_engine STATIC
     engine/src/quest_scene.cpp
     engine/src/rpg.cpp
     engine/src/scenery.cpp
+    engine/src/settings_scene.cpp
     engine/src/sprite.cpp
 )
 target_include_directories(vpet_engine PUBLIC engine/include)
@@ -59,9 +60,10 @@ if(VPET_BUILD_SDL)
         target_link_options(vpet PRIVATE -static-libgcc -static-libstdc++ -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic)
     endif()
 
-    # Ship the demo pack and SDL2.dll next to the executable.
+    # Ship the packs and SDL2.dll next to the executable.
     add_custom_command(TARGET vpet POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/packs/demo $<TARGET_FILE_DIR:vpet>/packs/demo
+        # All of packs/, so your own local (gitignored) packs show up in the game too.
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/packs $<TARGET_FILE_DIR:vpet>/packs
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:vpet> $<TARGET_FILE_DIR:vpet>
         COMMAND_EXPAND_LISTS)
 endif()

@@ -22,8 +22,11 @@ void draw_title(Framebuffer& fb, const Theme& t, const std::string& title) {
     fb.draw_text_centered(3, title, t.ui);
 }
 
-void draw_hearts(Framebuffer& fb, int x, int y, int filled) {
-    for (int i = 0; i < kMaxHearts; ++i) fb.draw_sprite(icons().heart, i < filled ? 0 : 1, x + i * 9, y);
+void draw_hearts(Framebuffer& fb, int x, int y, int halves) {
+    for (int i = 0; i < kMaxHearts; ++i) {
+        int frame = halves >= (i + 1) * 2 ? 0 : halves == i * 2 + 1 ? 2 : 1;
+        fb.draw_sprite(icons().heart, frame, x + i * 9, y);
+    }
 }
 
 void draw_footer(Framebuffer& fb, const Theme& t, const std::string& text) {
@@ -84,7 +87,9 @@ public:
 
     void on_press(Button b) override {
         if (b == BTN_A) page_ = (page_ + 1) % kPages;
+        else if (b == BTN_B && page_ == 3 && game_.species().stage != Stage::Egg) game_.push(make_moves_scene(game_));
         else game_.pop();
+
     }
 
     void draw(Framebuffer& fb) override {
@@ -120,7 +125,7 @@ public:
             fb.draw_text(kLabelX, 19, "HUNGER", t.accent);
             draw_hearts(fb, kValueX, 18, pet.hunger);
             fb.draw_text(kLabelX, 29, "STRENGTH", t.accent);
-            draw_hearts(fb, kValueX, 28, pet.strength);
+            draw_hearts(fb, kValueX, 28, pet.strength * 2);
             row(40, "POOP", std::to_string(pet.poop) + "/" + std::to_string(kMaxPoop));
             row(49, "SICK", pet.sick ? "YES" : "NO");
             row(58, "SLEEPING", pet.asleep ? "YES" : "NO");
@@ -175,7 +180,7 @@ public:
             if (!any) fb.draw_text(kValueX, y, "NONE", t.ui_text);
         }
 
-        draw_footer(fb, t, "A: NEXT  C: BACK");
+        draw_footer(fb, t, page_ == 3 ? "A: NEXT B: MOVES C: BACK" : "A: NEXT  C: BACK");
     }
 
 private:
@@ -211,7 +216,7 @@ public:
         draw_title(fb, t, "FEED");
 
         static const char* const kNames[kCount] = {"KIBBLE", "MEDICINE"};
-        static const char* const kInfo[kCount] = {"+1 HUNGER  +1G", "CURES SICKNESS"};
+        static const char* const kInfo[kCount] = {"+1/2 HUNGER  +1G", "CURES SICKNESS"};
         for (int i = 0; i < kCount; ++i) {
             int y = 22 + i * 12;
             if (i == cursor_) fb.fill_rect(4, y - 3, kScreenW - 8, 11, t.accent);
@@ -298,7 +303,7 @@ public:
         }
 
         fb.draw_text(kLabelX, 97, "STRENGTH", t.accent);
-        draw_hearts(fb, kValueX, 96, game_.pet().strength);
+        draw_hearts(fb, kValueX, 96, game_.pet().strength * 2);
         draw_footer(fb, t, phase_ == Phase::Ready ? "C: QUIT" : phase_ == Phase::Play ? "GO!" : "");
     }
 

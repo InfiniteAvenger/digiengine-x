@@ -15,11 +15,14 @@ std::unique_ptr<Scene> make_garden_scene(Game& game);
 std::unique_ptr<Scene> make_bag_scene(Game& game);
 std::unique_ptr<Scene> make_quest_scene(Game& game);
 std::unique_ptr<Scene> make_cryo_scene(Game& game);
+std::unique_ptr<Scene> make_settings_scene(Game& game);
+std::unique_ptr<Scene> make_moves_scene(Game& game);
 
 // Shared drawing helpers for full-screen menus.
 std::string format_duration(uint64_t ms);
 void draw_title(Framebuffer& fb, const Theme& t, const std::string& title);
-void draw_hearts(Framebuffer& fb, int x, int y, int filled);
+// Four hearts showing `halves` half hearts (0-8).
+void draw_hearts(Framebuffer& fb, int x, int y, int halves);
 void draw_footer(Framebuffer& fb, const Theme& t, const std::string& text);
 // Horizontal bar, value/max filled.
 void draw_bar(Framebuffer& fb, int x, int y, int w, int h, int value, int max, Color fill, Color back);

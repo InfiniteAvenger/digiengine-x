@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -55,6 +56,15 @@ public:
         return true;
     }
 
+    std::vector<std::string> list_dirs(const std::string& path) override {
+        std::vector<std::string> names;
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(path, ec))
+            if (entry.is_directory()) names.push_back(entry.path().filename().string());
+        std::sort(names.begin(), names.end());
+        return names;
+    }
+
     bool load_save(const std::string& slot, std::string& out) override {
         return read_file(save_dir_ + slot + ".sav", out);
     }
@@ -101,7 +111,7 @@ int main(int argc, char* argv[]) {
         pack_dir = argv[1];
     } else {
         char* base = SDL_GetBasePath();
-        pack_dir = std::string(base ? base : "") + "packs/demo";
+        pack_dir = std::string(base ? base : "") + "packs";  // every installed pack
         SDL_free(base);
     }
 

@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <vector>
 #include "vpet/framebuffer.h"
 
 namespace vpet {
@@ -22,6 +23,9 @@ public:
     virtual void present(const Framebuffer& fb) = 0;
     // Read-only content such as packs.
     virtual bool read_file(const std::string& path, std::string& out) = 0;
+    // Names of the folders inside `path` (for finding installed packs).
+    // Platforms with a single built-in pack can leave this empty.
+    virtual std::vector<std::string> list_dirs(const std::string& /*path*/) { return {}; }
     // Save slots, stored wherever the platform keeps user data.
     virtual bool load_save(const std::string& slot, std::string& out) = 0;
     virtual bool write_save(const std::string& slot, const std::string& data) = 0;

@@ -8,6 +8,7 @@
 namespace vpet {
 
 constexpr int kMaxHearts = 4;
+constexpr int kHungerHalves = kMaxHearts * 2;  // hunger is tracked in half hearts
 constexpr int kMaxPoop = 4;
 constexpr uint32_t kCallTimeoutS = 10 * 60;  // an ignored call becomes a care mistake
 constexpr int kCryoSlots = 2;
@@ -42,7 +43,9 @@ struct Pet {
     uint64_t stage_ms = 0;  // when the current form was reached
     uint64_t sim_ms = 0;    // simulated up to this time
 
-    uint8_t hunger = 0, strength = 0, poop = 0;  // hearts / poop count
+    uint8_t hunger = 0;    // half hearts, 0..kHungerHalves
+    uint8_t strength = 0;  // hearts, 0..kMaxHearts
+    uint8_t poop = 0;
     uint16_t weight = 0;
     uint16_t care_mistakes = 0;
     uint16_t trainings = 0;
@@ -64,6 +67,7 @@ struct Pet {
     uint32_t xp = 0;
     Stats bonus;  // permanent, from chips
     Run run;
+    std::vector<int> moves;  // equipped move indices; empty = newest three learned
 
     uint64_t frozen_ms = 0;  // when it went into cryo (only while stored)
 
@@ -78,6 +82,7 @@ struct Home {
 
 // Everything in one save slot.
 struct Save {
+    std::string roster;  // id of the version new eggs hatch from
     Pet active;
     Home home;
     std::optional<Pet> cryo[kCryoSlots];

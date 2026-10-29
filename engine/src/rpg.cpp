@@ -21,20 +21,52 @@ void gain_xp(const Pack& pack, Pet& pet, uint32_t xp, std::vector<std::string>& 
         pet.xp -= xp_to_next(pet.level);
         ++pet.level;
         msgs.push_back(s.name + " GREW TO LV " + std::to_string(pet.level) + "!");
-        for (const LearnRule& r : s.learns)
-            if (r.level == pet.level) msgs.push_back("LEARNED " + pack.moves[r.move].name + "!");
+        for (const LearnRule& r : s.learns) {
+            if (r.level != pet.level) continue;
+            msgs.push_back("LEARNED " + pack.moves[r.move].name + "!");
+            // With hand-picked moves and a free slot, equip the new one too.
+            if (!pet.moves.empty() && pet.moves.size() < size_t(kMaxEquippedMoves)) pet.moves.push_back(r.move);
+        }
     }
 }
 
-std::vector<int> equipped_moves(const Pack& pack, const Pet& pet) {
+std::vector<int> learned_moves(const Pack& pack, const Pet& pet) {
     std::vector<LearnRule> known;
     for (const LearnRule& r : pack.species[pet.species].learns)
         if (r.level <= pet.level) known.push_back(r);
     std::stable_sort(known.begin(), known.end(), [](const LearnRule& a, const LearnRule& b) { return a.level < b.level; });
     std::vector<int> moves;
-    for (size_t i = known.size() > kMaxEquippedMoves ? known.size() - kMaxEquippedMoves : 0; i < known.size(); ++i)
-        moves.push_back(known[i].move);
+    for (const LearnRule& r : known)
+        if (std::find(moves.begin(), moves.end(), r.move) == moves.end()) moves.push_back(r.move);
     return moves;
+}
+
+std::vector<int> equipped_moves(const Pack& pack, const Pet& pet) {
+    std::vector<int> known = learned_moves(pack, pet);
+    // The player's own picks, minus any the current form no longer knows.
+    std::vector<int> chosen;
+    for (int m : pet.moves)
+        if (std::find(known.begin(), known.end(), m) != known.end() && chosen.size() < size_t(kMaxEquippedMoves))
+            chosen.push_back(m);
+    if (!chosen.empty()) return chosen;
+    size_t from = known.size() > size_t(kMaxEquippedMoves) ? known.size() - kMaxEquippedMoves : 0;
+    return std::vector<int>(known.begin() + std::ptrdiff_t(from), known.end());
+}
+
+bool toggle_move(const Pack& pack, Pet& pet, int move, std::string& msg) {
+    std::vector<int> eq = equipped_moves(pack, pet);
+    auto it = std::find(eq.begin(), eq.end(), move);
+    if (it != eq.end()) {
+        if (eq.size() == 1) return msg = "KEEP AT LEAST ONE", false;
+        eq.erase(it);
+        msg = "UNEQUIPPED";
+    } else {
+        if (eq.size() >= size_t(kMaxEquippedMoves)) return msg = "3 MOVES MAX", false;
+        eq.push_back(move);
+        msg = "EQUIPPED";
+    }
+    pet.moves = eq;
+    return true;
 }
 
 // --- Items --------------------------------------------------------------------
@@ -57,9 +89,9 @@ bool use_item_at_home(const Pack& pack, Pet& pet, Home& home, int item, std::str
     if (pet.asleep) return msg = "ZZZ...", false;
     if (e.forever && pet.forever) return msg = "ALREADY FOREVER", false;
     bool only_food = !e.strength && !e.cure && !e.forever && !e.bonus.hp && !e.bonus.atk && !e.bonus.def && !e.bonus.spd;
-    if (e.hunger && pet.hunger >= kMaxHearts && only_food) return msg = "FULL!", false;
+    if (e.hunger && pet.hunger >= kHungerHalves && only_food) return msg = "FULL!", false;
 
-    pet.hunger = uint8_t(std::min(kMaxHearts, pet.hunger + e.hunger));
+    pet.hunger = uint8_t(std::min(kHungerHalves, pet.hunger + e.hunger * 2));  // effects are whole hearts
     pet.strength = uint8_t(std::min(kMaxHearts, pet.strength + e.strength));
     if (e.hunger) pet.hunger_call = Call{};
     if (e.strength) pet.strength_call = Call{};

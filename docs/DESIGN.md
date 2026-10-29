@@ -49,8 +49,9 @@ ESP32 reads straight from flash.
 
 ## Care rules (Phase 2)
 
-- **Hunger / strength:** 0-4 hearts, each drops on a per-form timer that only
-  runs while awake. Kibble (free, unlimited) adds a hunger heart and 1g.
+- **Hunger / strength:** 0-4 hearts. Hunger moves in half hearts, strength in
+  whole hearts, each dropping on a per-form timer that only runs while awake.
+  Kibble (free, unlimited) adds half a heart and 1g; food items add whole hearts.
   Training (stop the meter in the gold zone) adds a strength heart on a hit
   and burns 1g either way.
 - **Calls:** an empty hunger or strength meter, or lights left on at bedtime,
@@ -98,7 +99,7 @@ ESP32 reads straight from flash.
 | 1     | Engine shell: scene stack, sprites, font, menus                | **done** |
 | 2     | Home loop: hunger, strength, poop, sleep, care mistakes, saves | **done** |
 | 3     | Early ESP32 port to prove memory/speed budget                  | compiles, untested on hardware |
-| 4     | Evolution conditions, cold storage, Forever Partner item       |          |
+| 4     | Evolution conditions, cold storage, Forever Partner item       | **done** |
 | 5     | Infinite quest floors, moves, 4 attack minigames               | **done** |
 | 6     | Ecological drops, garden, cooking, crafting                    | **done** |
 | 7     | Android build, local link PvP, then online PvP                 |          |
@@ -109,3 +110,13 @@ ESP32 reads straight from flash.
 - ESP32 clock source: RTC with backup battery vs. Wi-Fi time sync.
 - Project name and code license.
 - Floor scaling formula for the infinite quest.
+
+## Settings, packs and versions
+
+- Hold **A+C for 3 seconds** on any screen to open settings. There is no icon.
+- **Pack:** every folder in `packs/` is a pack; switching saves the current one,
+  and each pack keeps its own save. The last pack used opens on launch.
+- **Version:** a pack's `rosters`; new eggs hatch from the chosen one.
+- **Moves:** equip any 1-3 learned moves (also from Status page 4). With
+  hand-picked moves and a free slot, newly learned moves are equipped too.
+- **Cryo:** two slots (snowflake icon); frozen pets' timers all pause.

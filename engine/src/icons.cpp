@@ -39,6 +39,13 @@ g.....g
 .g...g.
 ..g.g..
 ...g...
+frame
+.gg.gg.
+grrg..g
+grwr..g
+.grr.g.
+..grg..
+...g...
 )";
 
 constexpr const char* kAttention = R"(size 7 7

@@ -6,7 +6,7 @@ namespace vpet {
 // UI sprites built into the engine (packs may override these later).
 struct Icons {
     Sprite poop;       // 8x8
-    Sprite heart;      // 7x6, frame 0 full, frame 1 empty
+    Sprite heart;      // 7x6, frame 0 full, 1 empty, 2 half
     Sprite attention;  // 7x7
     Sprite sick;       // 7x7
     Sprite menu;       // 9x9 masks, one frame per home menu slot
