@@ -60,10 +60,15 @@ if(VPET_BUILD_SDL)
         target_link_options(vpet PRIVATE -static-libgcc -static-libstdc++ -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic)
     endif()
 
-    # Ship the packs and SDL2.dll next to the executable.
+    # Ship SDL2.dll next to the executable.
     add_custom_command(TARGET vpet POST_BUILD
-        # All of packs/, so your own local (gitignored) packs show up in the game too.
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/packs $<TARGET_FILE_DIR:vpet>/packs
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:vpet> $<TARGET_FILE_DIR:vpet>
         COMMAND_EXPAND_LISTS)
+
+    # Copy all of packs/ on every build (not only when the game relinks), so
+    # newly added or re-baked local packs always show up in the game.
+    add_custom_target(copy_packs ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/packs $<TARGET_FILE_DIR:vpet>/packs
+        COMMENT "Copying packs next to the game")
+    add_dependencies(copy_packs vpet)
 endif()
