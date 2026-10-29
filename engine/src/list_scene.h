@@ -51,7 +51,7 @@ public:
         for (int i = first; i < n && i < first + kVisible; ++i) {
             int y = 15 + (i - first) * 10;
             bool sel = i == cursor_;
-            if (sel) fb.fill_rect(2, y - 2, kScreenW - 4, 10, mix(t.ui, t.accent, 70));
+            if (sel) fb.panel(2, y - 2, kScreenW - 4, 10, mix(t.ui, t.accent, 60), t.accent);
             int tx = 6;
             if (rows[i].item >= 0) {
                 draw_item_icon(fb, game_.pack(), rows[i].item, 4, y - 2);
@@ -65,10 +65,10 @@ public:
             fb.fill_rect(kScreenW - 2, 13 + (70 - h) * first / (n - kVisible), 1, h, t.accent);
         }
 
-        fb.fill_rect(0, 85, kScreenW, 1, mix(t.ui, t.ui_text, 40));
+        draw_card(fb, t, 2, 85, kScreenW - 4, 22);
         std::vector<std::string> lines = wrap_text(detail_(cursor_), 28);
         for (size_t l = 0; l < lines.size() && l < 2; ++l)
-            fb.draw_text(4, 89 + int(l) * 8, lines[l], mix(t.ui_text, t.ui, 50));
+            fb.draw_text(5, 89 + int(l) * 8, lines[l], mix(t.ui_text, t.ui, 50));
         draw_footer(fb, t, "A: NEXT B: CHOOSE C: BACK");
     }
 

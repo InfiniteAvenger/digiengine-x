@@ -25,7 +25,12 @@ void draw_title(Framebuffer& fb, const Theme& t, const std::string& title);
 void draw_hearts(Framebuffer& fb, int x, int y, int halves, int hearts);
 // Width in pixels of a row of `hearts` hearts.
 constexpr int hearts_width(int hearts) { return hearts * 9 - 2; }
+// Button hints: "A: NEXT B: BACK" style text drawn with key caps.
 void draw_footer(Framebuffer& fb, const Theme& t, const std::string& text);
+// Small dots in the title bar showing which page of `count` is open.
+void draw_page_dots(Framebuffer& fb, const Theme& t, int page, int count);
+// A raised panel for grouping rows.
+void draw_card(Framebuffer& fb, const Theme& t, int x, int y, int w, int h);
 // Horizontal bar, value/max filled.
 void draw_bar(Framebuffer& fb, int x, int y, int w, int h, int value, int max, Color fill, Color back);
 Color rarity_color(Rarity r);

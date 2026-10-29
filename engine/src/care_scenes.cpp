@@ -18,8 +18,30 @@ std::string format_duration(uint64_t ms) {
 
 void draw_title(Framebuffer& fb, const Theme& t, const std::string& title) {
     fb.clear(t.ui);
+    // Faint diagonal texture so full-screen menus aren't flat.
+    Color grain = mix(t.ui, t.ui_text, 12);
+    for (int y = 12; y < kScreenH; ++y)
+        for (int x = (6 - y % 6) % 6; x < kScreenW; x += 6) fb.set(x, y, grain);
+    // Beveled header: light top edge, dark bottom edge, then a soft shadow.
     fb.fill_rect(0, 0, kScreenW, 11, t.accent);
+    fb.fill_rect(0, 0, kScreenW, 1, mix(t.accent, rgb(0xff, 0xff, 0xff), 110));
+    fb.fill_rect(0, 10, kScreenW, 1, mix(t.accent, rgb(0, 0, 0), 70));
+    fb.fill_rect(0, 11, kScreenW, 1, mix(t.ui, rgb(0, 0, 0), 120));
+    fb.draw_text_centered(4, title, mix(t.accent, rgb(0, 0, 0), 60));  // engraved shadow
     fb.draw_text_centered(3, title, t.ui);
+}
+
+void draw_page_dots(Framebuffer& fb, const Theme& t, int page, int count) {
+    for (int i = 0; i < count; ++i) {
+        int x = kScreenW - 6 - (count - 1 - i) * 5;
+        Color c = i == page ? t.ui : mix(t.accent, rgb(0, 0, 0), 60);
+        fb.fill_rect(x - 1, 4, 3, 3, c);
+    }
+}
+
+void draw_card(Framebuffer& fb, const Theme& t, int x, int y, int w, int h) {
+    fb.panel(x, y, w, h, mix(t.ui, t.ui_text, 14), mix(t.ui, t.ui_text, 40));
+    fb.fill_rect(x + 1, y + 1, w - 2, 1, mix(t.ui, t.ui_text, 26));  // top highlight
 }
 
 void draw_hearts(Framebuffer& fb, int x, int y, int halves, int hearts) {
@@ -30,8 +52,49 @@ void draw_hearts(Framebuffer& fb, int x, int y, int halves, int hearts) {
 }
 
 void draw_footer(Framebuffer& fb, const Theme& t, const std::string& text) {
-    fb.fill_rect(0, kScreenH - 11, kScreenW, 11, mix(t.ui, t.ui_text, 24));
-    fb.draw_text_centered(kScreenH - 8, text, mix(t.ui_text, t.ui, 60));
+    const int y = kScreenH - 11;
+    fb.fill_rect(0, y, kScreenW, 11, mix(t.ui, t.ui_text, 22));
+    fb.fill_rect(0, y, kScreenW, 1, mix(t.ui, t.accent, 70));
+
+    // "A: NEXT B: CHOOSE C: BACK" -> [A] NEXT [B] CHOOSE [C] BACK, with each
+    // button letter drawn as a little key cap.
+    struct Part {
+        char key;  // 0 for plain text
+        std::string label;
+    };
+    std::vector<Part> parts;
+    for (size_t i = 0; i < text.size();) {
+        bool key = i + 1 < text.size() && text[i] >= 'A' && text[i] <= 'C' && text[i + 1] == ':' &&
+                   (i == 0 || text[i - 1] == ' ');
+        if (key) {
+            size_t start = i + 2;
+            while (start < text.size() && text[start] == ' ') ++start;
+            size_t end = start;
+            while (end < text.size() && !(end + 1 < text.size() && text[end] == ' ' && text[end + 1] >= 'A' &&
+                                          text[end + 1] <= 'C' && end + 2 < text.size() && text[end + 2] == ':'))
+                ++end;
+            std::string label = text.substr(start, end - start);
+            while (!label.empty() && label.back() == ' ') label.pop_back();
+            parts.push_back({text[i], label});
+            i = end;
+            while (i < text.size() && text[i] == ' ') ++i;
+        } else {
+            parts.push_back({0, text.substr(i)});
+            break;
+        }
+    }
+    int width = 0;
+    for (const Part& p : parts) width += (p.key ? 9 : 0) + Framebuffer::text_width(p.label) + 6;
+    int x = (kScreenW - (width - 6)) / 2;
+    for (const Part& p : parts) {
+        if (p.key) {
+            fb.panel(x, y + 2, 7, 8, t.accent, mix(t.accent, rgb(0, 0, 0), 80));
+            fb.draw_text(x + 2, y + 3, std::string(1, p.key), t.ui);
+            x += 9;
+        }
+        fb.draw_text(x, y + 3, p.label, mix(t.ui_text, t.ui, 40));
+        x += Framebuffer::text_width(p.label) + 6;
+    }
 }
 
 void draw_bar(Framebuffer& fb, int x, int y, int w, int h, int value, int max, Color fill, Color back) {
@@ -103,7 +166,9 @@ public:
             fb.draw_text(kValueX, y, value, t.ui_text);
         };
 
-        draw_title(fb, t, "STATUS " + std::to_string(page_ + 1) + "/" + std::to_string(kPages));
+        draw_title(fb, t, "STATUS");
+        draw_page_dots(fb, t, page_, kPages);
+        draw_card(fb, t, 2, 14, kScreenW - 4, 93);
 
         if (page_ == 0) {
             row(18, "NAME", s.name);
@@ -122,7 +187,13 @@ public:
             std::optional<uint64_t> life = lifespan_left_ms(game_.pack(), pet, now);
             if (pet.forever) row(72, "LIFESPAN", "FOREVER");
             else if (life) row(72, "LIFESPAN", format_duration(*life) + " LEFT");
-            fb.draw_sprite(s.sprite, 0, kScreenW - 4 - s.sprite.w * 2, 14, 2);
+            // Portrait in a little framed window with a sky-and-grass backdrop.
+            int px = kScreenW - 40, py = 16;
+            fb.panel(px, py, 36, 36, t.bg_top, mix(t.ui, t.accent, 120));
+            fb.fill_rect(px + 1, py + 1, 34, 12, mix(t.bg_top, rgb(0xff, 0xff, 0xff), 70));
+            fb.fill_rect(px + 1, py + 27, 34, 8, t.bg_bottom);
+            fb.fill_rect(px + 1, py + 27, 34, 1, mix(t.bg_bottom, rgb(0xff, 0xff, 0xff), 60));
+            fb.draw_sprite(s.sprite, 0, px + 2, py + 2, 2);
         } else if (page_ == 1) {
             fb.draw_text(kLabelX, 19, "HUNGER", t.accent);
             draw_hearts(fb, kValueX, 18, pet.hunger, max_hearts(game_.pack(), pet));
@@ -224,10 +295,12 @@ public:
         static const char* const kInfo[kCount] = {"+1/2 HUNGER  +1G", "CURES SICKNESS"};
         for (int i = 0; i < kCount; ++i) {
             int y = 22 + i * 12;
-            if (i == cursor_) fb.fill_rect(4, y - 3, kScreenW - 8, 11, t.accent);
-            fb.draw_text(10, y, kNames[i], i == cursor_ ? t.ui : t.ui_text);
+            if (i == cursor_) fb.panel(4, y - 3, kScreenW - 8, 11, mix(t.ui, t.accent, 60), t.accent);
+            if (i == cursor_) fb.draw_text(7, y, ">", t.accent);
+            fb.draw_text(12, y, kNames[i], i == cursor_ ? t.accent : t.ui_text);
         }
-        fb.draw_text_centered(52, kInfo[cursor_], t.ui_text);
+        fb.draw_text_centered(50, kInfo[cursor_], mix(t.ui_text, t.ui, 40));
+        draw_card(fb, t, 2, 63, kScreenW - 4, 28);
 
         fb.draw_text(kLabelX, 70, "HUNGER", t.accent);
         draw_hearts(fb, kValueX, 69, pet.hunger, max_hearts(game_.pack(), pet));
@@ -308,6 +381,7 @@ public:
             fb.draw_text_centered(76, mini_.success() ? (full ? "STRENGTH IS FULL" : "+1 STRENGTH") : "-1G ANYWAY", dim);
         }
 
+        draw_card(fb, t, 2, 92, kScreenW - 4, 15);
         fb.draw_text(kLabelX, 97, "STRENGTH", t.accent);
         draw_hearts(fb, kValueX, 96, game_.pet().strength * 2, max_hearts(game_.pack(), game_.pet()));
         draw_footer(fb, t, phase_ == Phase::Ready ? "C: QUIT" : phase_ == Phase::Play ? "GO!" : "");
