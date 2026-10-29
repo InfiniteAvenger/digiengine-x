@@ -1,0 +1,6 @@
+# One rule per row. Rules for the same creature are tried top to bottom;
+# the first whose conditions all pass wins. Blank cells mean "no condition".
+from,to,hours_in_stage,max_care_mistakes,min_level,min_effort,min_quest_floor
+sample_egg,sample_blob,0.01,,,,
+sample_blob,sample_fang,1,1,,2,
+sample_blob,sample_sprout,1,,,,

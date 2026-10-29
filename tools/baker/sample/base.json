@@ -1,0 +1,16 @@
+{
+  "id": "baker_sample",
+  "name": "Baker Sample",
+  "version": "0.1.0",
+  "author": "vpet contributors",
+  "license": "CC0-1.0",
+  "theme": { "bg_top": "9bd4ff", "bg_bottom": "6bbf59", "ui": "1a1c2c", "ui_text": "f4f4f4", "accent": "ffcd75" },
+  "moves": [
+    { "id": "tackle", "name": "TACKLE", "power": 10, "game": "timing" },
+    { "id": "chomp", "name": "CHOMP", "power": 12, "game": "mash" }
+  ],
+  "enemies": [
+    { "id": "sample_foe", "name": "SAMPLE FOE", "sprite": "sprites/fangbit.png",
+      "stats": { "hp": 15, "atk": 4, "def": 3, "spd": 4 }, "moves": ["tackle"] }
+  ]
+}

@@ -1,0 +1,3 @@
+# Keep text files LF everywhere so diffs match across Windows, Linux and the ESP32 toolchain.
+* text=auto eol=lf
+*.png binary

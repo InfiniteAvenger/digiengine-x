@@ -3,12 +3,15 @@
 // 24-bit BMPs (scaled 4x). Exit code is the number of failed checks.
 //   vpet_snapshot <pack_dir> <out_dir>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <sstream>
 #include <string>
 #include "vpet/game.h"
+#include "baker.h"
 #include "vpet/minigame.h"
+#include "vpet/png.h"
 #include "vpet/rpg.h"
 
 namespace {
@@ -79,6 +82,88 @@ void check(bool ok, const char* what) {
     if (!ok) ++failures;
 }
 
+bool same_pixels(const vpet::Sprite& a, const vpet::Sprite& b) {
+    if (a.w != b.w || a.h != b.h || a.frames != b.frames || a.pixels.size() != b.pixels.size()) return false;
+    for (size_t i = 0; i < a.pixels.size(); ++i) {
+        bool ta = a.pixels[i] == 0, tb = b.pixels[i] == 0;
+        if (ta != tb || (!ta && a.palette[a.pixels[i]] != b.palette[b.pixels[i]])) return false;
+    }
+    return true;
+}
+
+void write_file(const std::string& path, const std::string& data) {
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    std::ofstream(path, std::ios::binary) << data;
+}
+
+// PNG codec, PNG sprites in packs, and the baker.
+void pack_tool_checks(FakePlatform& p, const std::string& demo_dir) {
+    std::printf("png and baker\n");
+    std::string text, err;
+    vpet::Sprite blip;
+    p.read_file(demo_dir + "/sprites/blip.spr", text);
+    vpet::parse_sprite(text, blip, err);
+
+    vpet::Image img = vpet::image_from_sprite(blip), back;
+    vpet::Sprite again;
+    check(vpet::decode_png(vpet::encode_png(img), back, err) && vpet::sprite_from_image(back, 16, 16, again, err) &&
+              same_pixels(blip, again),
+          "png: sprite -> png -> sprite round-trips exactly");
+
+    std::string compressed;
+    vpet::Image cimg;
+    vpet::Sprite cspr;
+    check(p.read_file("tools/snapshot/fixtures/blip_compressed.png", compressed) &&
+              vpet::decode_png(compressed, cimg, err) && vpet::sprite_from_image(cimg, 0, 0, cspr, err) &&
+              same_pixels(blip, cspr),
+          "png: decodes a deflate-compressed PNG saved by another encoder");
+
+    std::string spr_text;
+    vpet::Sprite reparsed;
+    check(vpet::write_spr(blip, spr_text, err) && vpet::parse_sprite(spr_text, reparsed, err) && same_pixels(blip, reparsed),
+          "spr: writing and re-reading a sprite is lossless");
+
+    // A pack whose creature sprites are PNG strips, loaded directly.
+    std::string dir = "build/test_packs/png_direct";
+    std::string pack_json;
+    p.read_file(demo_dir + "/pack.json", pack_json);
+    auto replace = [&](const std::string& from, const std::string& to) {
+        size_t at = pack_json.find(from);
+        if (at != std::string::npos) pack_json.replace(at, from.size(), to);
+    };
+    replace("sprites/blip.spr", "sprites/blip.png");
+    write_file(dir + "/pack.json", pack_json);
+    for (const char* f : {"pixegg.spr", "fangbit.spr", "cogbot.spr", "vinelet.spr", "glitch_king.spr", "items.spr",
+                          "crop_berry.spr", "crop_herb.spr", "crop_glow.spr"}) {
+        p.read_file(demo_dir + "/sprites/" + f, text);
+        write_file(dir + "/sprites/" + f, text);
+    }
+    write_file(dir + "/sprites/blip.png", vpet::encode_png(img));
+    vpet::Pack png_pack;
+    bool loaded = vpet::load_pack(p, dir, png_pack, err);
+    int bi = png_pack.find_species("blip");
+    check(loaded && bi >= 0 && same_pixels(png_pack.species[bi].sprite, blip), "pack: loads a PNG sprite strip directly");
+
+    // The baker turns the CC0 sample folder into a loadable pack.
+    vpet::BakeReport rep;
+    std::filesystem::remove_all("build/test_packs/baked");
+    bool baked = vpet::bake_pack("tools/baker/sample", "build/test_packs/baked", rep);
+    vpet::Pack baked_pack;
+    bool baked_loads = baked && vpet::load_pack(p, "build/test_packs/baked", baked_pack, err);
+    if (!baked_loads) std::printf("  bake/load error: %s\n", (rep.errors.empty() ? err : rep.errors[0]).c_str());
+    check(baked_loads && baked_pack.species.size() == 4 && rep.evolutions == 3, "baker: sample folder bakes into a pack that loads");
+    int sb = baked_loads ? baked_pack.find_species("sample_blob") : -1;
+    check(sb >= 0 && same_pixels(baked_pack.species[sb].sprite, blip), "baker: converted sprites keep their pixels");
+
+    // Broken input is reported, not silently accepted.
+    write_file("build/test_packs/broken_src/species.csv",
+               "id,name,stage,sprite\nbad1,Bad,notastage,sprites/x.png\nbad2,Bad,egg,sprites/missing.png\n");
+    write_file("build/test_packs/broken_src/evolutions.csv", "from,to\nbad2,nobody\n");
+    vpet::BakeReport bad;
+    bool bad_ok = vpet::bake_pack("build/test_packs/broken_src", "build/test_packs/broken_out", bad);
+    check(!bad_ok && bad.errors.size() >= 3, "baker: reports bad stages, missing sprites and unknown species");
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -87,6 +172,7 @@ int main(int argc, char* argv[]) {
         return 2;
     }
     FakePlatform p;
+    pack_tool_checks(p, argv[1]);
     auto game = std::make_unique<vpet::Game>(p);
     if (!game->init(argv[1])) return 1;
     std::string out = argv[2];

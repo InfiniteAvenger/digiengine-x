@@ -1,6 +1,6 @@
 # The portable engine, compiled unchanged from the repo's engine/ folder.
 set(root ${CMAKE_CURRENT_LIST_DIR}/../../../..)
-file(GLOB srcs ${root}/engine/src/*.cpp)
+file(GLOB srcs CONFIGURE_DEPENDS ${root}/engine/src/*.cpp)
 
 idf_component_register(
     SRCS ${srcs}

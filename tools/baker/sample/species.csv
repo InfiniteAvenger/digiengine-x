@@ -1,0 +1,9 @@
+# Sample baker input (CC0). One creature per row.
+# sprite: a PNG strip (square frames, left to right) or a .spr file.
+# frame_w/frame_h: only needed for non-square frames. Stats left blank use stage defaults.
+# learns: move@level;move@level   (move ids come from base.json)
+id,name,stage,family,sprite,frame_w,frame_h,hp,atk,def,spd,learns
+sample_egg,Sample Egg,egg,,sprites/pixegg.png,,,,,,,
+sample_blob,Sample Blob,baby,plant,sprites/blip.png,,,20,5,4,5,tackle@1
+sample_fang,Sample Fang,child,beast,sprites/fangbit.png,,,40,12,7,9,tackle@1;chomp@3
+sample_sprout,Sample Sprout,child,plant,sprites/vinelet.png,,,36,9,9,10,tackle@1;chomp@4

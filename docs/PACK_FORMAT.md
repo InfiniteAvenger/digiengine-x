@@ -152,6 +152,15 @@ Given to every new egg.
 
 Unknown fields are ignored, so packs can add fields for future features early.
 
+## PNG sprites
+
+Anywhere a sprite path is accepted, a `.png` works too. Frames are read left
+to right (or as a grid, row by row) and default to squares as tall as the
+image; add `"frame_size": [w, h]` to the species, enemy or crop for other
+sizes. Pixels under 50% alpha are transparent; up to 255 colors.
+
+To build a whole pack from PNGs and spreadsheets, see `tools/baker/`.
+
 ## Sprite files (.spr)
 
 A plain-text, diff-friendly format. PNG sprite sheets will be supported by the

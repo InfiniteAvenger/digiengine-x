@@ -1,6 +1,7 @@
 #include "vpet/pack.h"
 #include "vpet/json.h"
 #include "vpet/platform.h"
+#include "vpet/png.h"
 
 namespace vpet {
 
@@ -68,12 +69,25 @@ void read_effect(const Json& j, Effect& e) {
     e.def_buff = j["def_buff"].int_or(0);
 }
 
+// Loads a .spr text sprite or a .png sheet. For PNGs, `owner` may give
+// "frame_size": [w, h]; by default frames are squares as tall as the image,
+// laid out left to right.
 bool load_sprite_file(Platform& platform, const std::string& dir, const std::string& rel, Sprite& out,
-                      std::string& err) {
+                      std::string& err, const Json& owner = Json()) {
     std::string path = dir + "/" + rel, text;
     if (!platform.read_file(path, text)) {
         err = "cannot read " + path;
         return false;
+    }
+    bool png = rel.size() > 4 && (rel.compare(rel.size() - 4, 4, ".png") == 0 || rel.compare(rel.size() - 4, 4, ".PNG") == 0);
+    if (png) {
+        Image img;
+        const Json& fs = owner["frame_size"];
+        if (!decode_png(text, img, err) || !sprite_from_image(img, fs[size_t(0)].int_or(0), fs[size_t(1)].int_or(0), out, err)) {
+            err = path + ": " + err;
+            return false;
+        }
+        return true;
     }
     if (!parse_sprite(text, out, err)) {
         err = path + " " + err;
@@ -266,7 +280,7 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
             if (!move_ref(learns[l]["move"].str_or(""), s.id, rule.move)) return false;
             s.learns.push_back(rule);
         }
-        if (!load_sprite_file(platform, dir, js["sprite"].str_or(""), s.sprite, err)) return false;
+        if (!load_sprite_file(platform, dir, js["sprite"].str_or(""), s.sprite, err, js)) return false;
         out.species.push_back(std::move(s));
     }
 
@@ -326,7 +340,7 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
             drop.chance = float(je["drops"][d]["chance"].num_or(0));
             e.drops.push_back(drop);
         }
-        if (!load_sprite_file(platform, dir, je["sprite"].str_or(""), e.sprite, err)) return false;
+        if (!load_sprite_file(platform, dir, je["sprite"].str_or(""), e.sprite, err, je)) return false;
         out.enemies.push_back(std::move(e));
     }
 
@@ -340,7 +354,7 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
             return false;
         c.count = jc["count"].int_or(1);
         c.grow_s = uint32_t(jc["minutes"].num_or(30) * 60.0);
-        if (!load_sprite_file(platform, dir, jc["sprite"].str_or(""), c.sprite, err)) return false;
+        if (!load_sprite_file(platform, dir, jc["sprite"].str_or(""), c.sprite, err, jc)) return false;
         if (c.sprite.frames != 4) {
             err = "crop " + c.name + ": sprite needs exactly 4 frames";
             return false;

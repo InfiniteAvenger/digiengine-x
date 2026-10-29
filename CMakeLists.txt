@@ -17,6 +17,7 @@ add_library(vpet_engine STATIC
     engine/src/icons.cpp
     engine/src/json.cpp
     engine/src/minigame.cpp
+    engine/src/png.cpp
     engine/src/pack.cpp
     engine/src/pet.cpp
     engine/src/quest_scene.cpp
@@ -29,9 +30,19 @@ if(NOT MSVC)
     target_compile_options(vpet_engine PRIVATE -Wall -Wextra)
 endif()
 
+# Pack baker: PNG sheets + CSV tables -> pack folder (desktop tool only).
+add_library(vpet_baker_lib STATIC tools/baker/baker.cpp)
+target_link_libraries(vpet_baker_lib PUBLIC vpet_engine)
+target_include_directories(vpet_baker_lib PUBLIC tools/baker)
+add_executable(vpet_baker tools/baker/main.cpp)
+target_link_libraries(vpet_baker PRIVATE vpet_baker_lib)
+if(MINGW)
+    target_link_options(vpet_baker PRIVATE -static)
+endif()
+
 # Headless screenshot runner for checking screens without a window.
 add_executable(vpet_snapshot tools/snapshot/main.cpp)
-target_link_libraries(vpet_snapshot PRIVATE vpet_engine)
+target_link_libraries(vpet_snapshot PRIVATE vpet_engine vpet_baker_lib)
 if(MINGW)
     target_link_options(vpet_snapshot PRIVATE -static)
 endif()
