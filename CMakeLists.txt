@@ -35,7 +35,7 @@ endif()
 # Pack baker: PNG sheets + CSV tables -> pack folder (desktop tool only).
 add_library(vpet_baker_lib STATIC tools/baker/baker.cpp)
 target_link_libraries(vpet_baker_lib PUBLIC vpet_engine)
-target_include_directories(vpet_baker_lib PUBLIC tools/baker)
+target_include_directories(vpet_baker_lib PUBLIC tools/baker PRIVATE engine/src)
 add_executable(vpet_baker tools/baker/main.cpp)
 target_link_libraries(vpet_baker PRIVATE vpet_baker_lib)
 if(MINGW)

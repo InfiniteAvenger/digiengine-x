@@ -4,7 +4,7 @@ Builds a pack from a folder of PNG sprite sheets and two spreadsheets, so a
 big roster doesn't mean hand-writing JSON.
 
 ```bash
-vpet_baker build <source_dir> <pack_dir>
+vpet_baker build <source_dir> <pack_dir> [--placeholders]
 vpet_baker png2spr <in.png> <out.spr> [frame_w frame_h]
 vpet_baker spr2png <in.spr> <out.png>
 ```
@@ -37,6 +37,9 @@ See `sample/` for a complete, working example made from original CC0 art.
 | `frame_w`, `frame_h` | Frame size, only for non-square frames |
 | `hp`, `atk`, `def`, `spd` | Level-1 stats; blank uses stage defaults |
 | `learns` | `move@level;move@level` |
+| `hunger_minutes`, `strength_minutes`, `poop_minutes` | Care timers; blank uses stage defaults |
+| `sleep`, `wake` | `HH:MM`; the same time for both means it never sleeps |
+| `weight`, `hearts` | Base weight; meter size (1-5) |
 
 PNG strips hold frames left to right (or a grid, read row by row). Frame 0
 and 1 are the idle animation. Pixels under 50% alpha are transparent.
@@ -62,3 +65,21 @@ conditions all pass wins. Put the fallback (no conditions) last.
 - `sprites/<id>.spr` for each creature. A PNG with more than 92 colors is
   copied as-is instead (the engine loads PNGs directly too).
 - Every other file `base.json` refers to, copied unchanged.
+
+## Placeholders
+
+`--placeholders` draws a stand-in sprite for any creature whose sprite file is
+missing: a simple blob tinted by family, sized by stage, with the name's
+initials. The pack is playable right away; drop real PNGs into the source
+`sprites/` folder and re-bake to replace them one at a time. Without the
+flag, a missing sprite is an error.
+
+## Checking a pack
+
+```bash
+vpet_snapshot --validate <pack_dir>
+```
+
+Loads the pack through the engine and checks that every creature has a
+sprite and moves, that quest floors 1-60 all find enemies, and that each
+roster's egg hatches.

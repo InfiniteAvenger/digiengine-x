@@ -2,6 +2,7 @@
 // clock, checks the pet's state along the way, and writes chosen frames as
 // 24-bit BMPs (scaled 4x). Exit code is the number of failed checks.
 //   vpet_snapshot <pack_dir> <out_dir>
+//   vpet_snapshot --validate <pack_dir>     check any pack is loadable and playable
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
@@ -108,6 +109,7 @@ void write_file(const std::string& path, const std::string& data) {
 
 // PNG codec, PNG sprites in packs, and the baker.
 void pack_tool_checks(FakePlatform& p, const std::string& demo_dir) {
+    namespace fs = std::filesystem;
     std::printf("png and baker\n");
     std::string text, err;
     vpet::Sprite blip;
@@ -165,6 +167,43 @@ void pack_tool_checks(FakePlatform& p, const std::string& demo_dir) {
     check(baked_loads && baked_pack.species.size() == 4 && rep.evolutions == 3, "baker: sample folder bakes into a pack that loads");
     int sb = baked_loads ? baked_pack.find_species("sample_blob") : -1;
     check(sb >= 0 && same_pixels(baked_pack.species[sb].sprite, blip), "baker: converted sprites keep their pixels");
+
+    // Care columns, and placeholders for missing sprites.
+    fs::remove_all("build/test_packs/ph_src");
+    fs::copy("tools/baker/sample", "build/test_packs/ph_src", fs::copy_options::recursive);
+    {
+        std::ofstream csv("build/test_packs/ph_src/species.csv", std::ios::app);
+        csv << "sample_late,Sample Late,adult,machine,sprites/not_drawn_yet.png,,,50,14,12,11,tackle@1\n";
+    }
+    write_file("build/test_packs/ph_src/species.csv",
+               [] {
+                   std::ifstream f("build/test_packs/ph_src/species.csv");
+                   std::stringstream ss;
+                   ss << f.rdbuf();
+                   std::string s = ss.str();
+                   // add care columns to the header and to one row
+                   size_t h = s.find("id,name,stage,family,sprite,frame_w,frame_h,hp,atk,def,spd,learns");
+                   s.insert(s.find('\n', h), ",hunger_minutes,sleep,wake,hearts");
+                   size_t row = s.find("sample_blob,");
+                   s.insert(s.find('\n', row), ",12,00:00,00:00,2");
+                   return s;
+               }());
+    vpet::BakeReport ph;
+    vpet::BakeOptions popt;
+    bool missing_fails = !vpet::bake_pack("build/test_packs/ph_src", "build/test_packs/ph_out", ph, {});
+    popt.placeholders = true;
+    vpet::BakeReport ph2;
+    bool ph_ok = vpet::bake_pack("build/test_packs/ph_src", "build/test_packs/ph_out", ph2, popt);
+    vpet::Pack ph_pack;
+    ph_ok = ph_ok && vpet::load_pack(p, "build/test_packs/ph_out", ph_pack, err);
+    check(missing_fails, "baker: a missing sprite is an error by default");
+    int late = ph_ok ? ph_pack.find_species("sample_late") : -1;
+    check(ph_ok && ph2.placeholders.size() == 1 && late >= 0 && ph_pack.species[late].sprite.frames == 2,
+          "baker --placeholders: draws a 2-frame stand-in for a missing sprite");
+    int blob = ph_ok ? ph_pack.find_species("sample_blob") : -1;
+    check(blob >= 0 && ph_pack.species[blob].care.hunger_s == 12 * 60 && ph_pack.species[blob].care.hearts == 2 &&
+              ph_pack.species[blob].care.sleep_min == ph_pack.species[blob].care.wake_min,
+          "baker: care columns (hunger, hearts, never sleeps) reach the pack");
 
     // Broken input is reported, not silently accepted.
     write_file("build/test_packs/broken_src/species.csv",
@@ -442,10 +481,63 @@ void settings_checks(const FakePlatform& base, const std::string& demo_dir) {
     check(vpet::read_save(pack, legacy, old) && old.active.hunger == 6, "old whole-heart hunger loads as half hearts");
 }
 
+// --validate: load any pack through the engine and check it can be played.
+int validate_pack(const std::string& dir) {
+    std::printf("validating %s\n", dir.c_str());
+    FakePlatform p;
+    vpet::Pack pack;
+    std::string err;
+    if (!vpet::load_pack(p, dir, pack, err)) {
+        std::printf("  [FAIL] pack loads: %s\n", err.c_str());
+        return 1;
+    }
+    size_t rules = 0;
+    int per_stage[vpet::kStageCount] = {};
+    for (const vpet::Species& s : pack.species) {
+        rules += s.evolve.size();
+        ++per_stage[int(s.stage)];
+    }
+    std::printf("  %zu creatures, %zu evolution rules, %zu enemies, %zu items, %zu moves\n", pack.species.size(), rules,
+                pack.enemies.size(), pack.items.size(), pack.moves.size());
+    std::printf("  by stage:");
+    for (int i = 0; i < vpet::kStageCount; ++i) std::printf(" %s %d", vpet::stage_name(vpet::Stage(i)), per_stage[i]);
+    std::printf("\n");
+
+    bool sprites_ok = true, moves_ok = true;
+    for (const vpet::Species& s : pack.species) {
+        sprites_ok &= s.sprite.valid();
+        if (s.stage != vpet::Stage::Egg && s.learns.empty()) {
+            moves_ok = false;
+            std::printf("  no moves: %s\n", s.id.c_str());
+        }
+    }
+    check(sprites_ok, "every creature has a sprite");
+    check(moves_ok, "every hatched creature has at least one move");
+
+    // Every floor tier that has creatures can be fought; boss floors resolve.
+    bool picks_ok = true;
+    for (int floor : {1, 5, 10, 15, 20, 25, 30, 40, 60}) {
+        vpet::EnemyPick pick = vpet::pick_enemy(pack, floor, 12345u + uint32_t(floor));
+        picks_ok &= pick.index >= 0;
+    }
+    check(picks_ok, "quest floors 1-60 all find an enemy");
+
+    // Hatch each roster's egg in a real game.
+    for (size_t r = 0; r < pack.rosters.size(); ++r) {
+        vpet::Pet pet = vpet::new_pet(pack, pack.rosters[r].eggs[0], p.clock);
+        vpet::simulate(pack, pet, p.clock + 6ull * 3600 * 1000, p.offset);
+        check(pack.species[pet.species].stage != vpet::Stage::Egg,
+              ("roster " + pack.rosters[r].id + ": the egg hatches within 6 hours").c_str());
+    }
+    std::printf("%d check(s) failed\n", failures);
+    return failures;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
     std::setvbuf(stdout, nullptr, _IONBF, 0);  // keep output if a check crashes
+    if (argc == 3 && std::string(argv[1]) == "--validate") return validate_pack(argv[2]);
     if (argc < 3) {
         std::fprintf(stderr, "usage: vpet_snapshot <pack_dir> <out_dir>\n");
         return 2;

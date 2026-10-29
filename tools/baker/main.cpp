@@ -12,7 +12,9 @@ namespace {
 int usage() {
     std::puts(
         "usage:\n"
-        "  vpet_baker build <source_dir> <pack_dir>     bake species.csv/evolutions.csv/base.json + sprites\n"
+        "  vpet_baker build <source_dir> <pack_dir> [--placeholders]\n"
+        "      bake species.csv/evolutions.csv/base.json + sprites; --placeholders draws a\n"
+        "      stand-in sprite for any creature whose sprite file is missing\n"
         "  vpet_baker png2spr <in.png> <out.spr> [frame_w frame_h]\n"
         "  vpet_baker spr2png <in.spr> <out.png>        export .spr art as a PNG strip");
     return 2;
@@ -40,9 +42,14 @@ int main(int argc, char* argv[]) {
 
     if (cmd == "build") {
         vpet::BakeReport r;
-        bool ok = vpet::bake_pack(argv[2], argv[3], r);
+        vpet::BakeOptions opt;
+        opt.placeholders = argc > 4 && std::string(argv[4]) == "--placeholders";
+        bool ok = vpet::bake_pack(argv[2], argv[3], r, opt);
         for (const std::string& w : r.warnings) std::printf("warning: %s\n", w.c_str());
         for (const std::string& e : r.errors) std::printf("error: %s\n", e.c_str());
+        if (!r.placeholders.empty())
+            std::printf("%d creature(s) have no sprite yet and got a placeholder; add their PNGs and re-bake\n",
+                        int(r.placeholders.size()));
         std::printf("%s: %d species, %d sprites, %d evolution rules, %d extra files -> %s\n", ok ? "baked" : "FAILED",
                     r.species, r.sprites, r.evolutions, r.files_copied, argv[3]);
         return ok ? 0 : 1;

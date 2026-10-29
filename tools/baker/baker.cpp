@@ -1,4 +1,5 @@
 #include "baker.h"
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -6,6 +7,7 @@
 #include <sstream>
 #include "vpet/json.h"
 #include "vpet/pack.h"
+#include "font.h"
 #include "vpet/png.h"
 
 namespace fs = std::filesystem;
@@ -138,6 +140,64 @@ void collect_files(const Json& j, std::set<std::string>& out) {
     for (size_t i = 0; i < j.size(); ++i) collect_files(j[i], out);
 }
 
+// A stand-in sprite until real art exists: an egg shape, or a round blob with
+// eyes, tinted by family and sized by stage, with the name's initials on it.
+Sprite placeholder_sprite(const std::string& name, Stage stage, const std::string& family) {
+    Color body = family == "beast"     ? rgb(0xc0, 0x80, 0x50)
+                 : family == "machine" ? rgb(0x80, 0x98, 0xb0)
+                 : family == "plant"   ? rgb(0x58, 0xb0, 0x58)
+                 : family == "dark"    ? rgb(0x88, 0x60, 0xb8)
+                                       : rgb(0xa0, 0xa0, 0xa0);
+    Sprite s;
+    s.w = s.h = 16;
+    s.frames = 2;
+    s.palette = {0, rgb(0x1a, 0x1c, 0x2c), body, mix(body, rgb(0xff, 0xff, 0xff), 110), rgb(0xff, 0xff, 0xff)};
+    enum : uint8_t { kClear, kOutline, kBody, kShine, kText };
+    s.pixels.assign(16 * 16 * 2, kClear);
+
+    // Initials: first letter of the first two words (or first two letters).
+    std::string initials;
+    for (size_t i = 0; i < name.size() && initials.size() < 2; ++i)
+        if (isalnum(static_cast<unsigned char>(name[i])) && (i == 0 || name[i - 1] == ' '))
+            initials += char(toupper(static_cast<unsigned char>(name[i])));
+    if (initials.size() < 2 && name.size() > 1) initials = {char(toupper(static_cast<unsigned char>(name[0]))), char(toupper(static_cast<unsigned char>(name[1])))};
+
+    bool egg = stage == Stage::Egg;
+    float r = egg ? 5.5f : 3.5f + float(int(stage)) * 0.9f;  // bigger each stage
+    for (int f = 0; f < 2; ++f) {
+        uint8_t* px = &s.pixels[size_t(f) * 256];
+        float cx = 7.5f, cy = 15.5f - r - (egg ? 1.0f : 0.0f) + float(f);  // frame 1 bobs down
+        float ry = egg ? r * 1.3f : r * (f ? 0.92f : 1.0f);
+        for (int y = 0; y < 16; ++y)
+            for (int x = 0; x < 16; ++x) {
+                float dx = (float(x) - cx) / r, dy = (float(y) - cy) / ry;
+                float d = dx * dx + dy * dy;
+                if (d <= 1.0f) px[y * 16 + x] = d > 0.72f ? kOutline : kBody;
+            }
+        // A small shine, and eyes on hatched forms.
+        int top = int(cy - ry) + 2;
+        if (top >= 0 && top < 16) px[top * 16 + int(cx) - 2] = kShine;
+        if (!egg && r >= 4.0f) {
+            int ey = int(cy) - 1;
+            for (int ex : {int(cx) - 2, int(cx) + 2})
+                if (ey >= 0 && ey < 16) px[ey * 16 + ex] = kOutline;
+        }
+        // Initials in the 3x5 font, when the shape is big enough to hold them.
+        if (r >= 5.0f && initials.size() == 2) {
+            int tx = int(cx) - 3, ty = int(cy) + (egg ? -2 : 1);
+            for (size_t c = 0; c < 2; ++c)
+                if (const char* g = glyph_for(initials[c]))
+                    for (int gy = 0; gy < 5; ++gy)
+                        for (int gx = 0; gx < 3; ++gx)
+                            if (g[gy * 3 + gx] == '#') {
+                                int x = tx + int(c) * 4 + gx, y = ty + gy;
+                                if (x >= 0 && x < 16 && y >= 0 && y < 16 && px[y * 16 + x] == kBody) px[y * 16 + x] = kText;
+                            }
+        }
+    }
+    return s;
+}
+
 bool load_any_sprite(const fs::path& p, int fw, int fh, Sprite& s, std::string& err) {
     std::string data;
     if (!read_text(p, data)) return err = "cannot read " + p.string(), false;
@@ -151,7 +211,7 @@ bool load_any_sprite(const fs::path& p, int fw, int fh, Sprite& s, std::string& 
 
 }  // namespace
 
-bool bake_pack(const std::string& in_dir, const std::string& out_dir, BakeReport& r) {
+bool bake_pack(const std::string& in_dir, const std::string& out_dir, BakeReport& r, const BakeOptions& opt) {
     fs::path in(in_dir), out(out_dir);
     auto error = [&](const std::string& msg) { r.errors.push_back(msg); };
 
@@ -198,7 +258,10 @@ bool bake_pack(const std::string& in_dir, const std::string& out_dir, BakeReport
         cell_int(species.get(row, "frame_h"), fh);
         fs::path src = in / species.get(row, "sprite");
         Sprite spr;
-        if (!load_any_sprite(src, fw, fh, spr, err)) {
+        if (opt.placeholders && !fs::exists(src)) {
+            spr = placeholder_sprite(name.empty() ? id : name, st, species.get(row, "family"));
+            r.placeholders.push_back(id);
+        } else if (!load_any_sprite(src, fw, fh, spr, err)) {
             error(where + ": sprite " + species.get(row, "sprite") + ": " + err);
             continue;
         }
@@ -227,6 +290,22 @@ bool bake_pack(const std::string& in_dir, const std::string& out_dir, BakeReport
             else if (!cell.empty()) error(where + ": " + stat + " must be a whole number");
         }
         if (!stats.empty()) o += ",\n      \"stats\": { " + stats + " }";
+
+        // Optional care columns; blank cells keep the stage defaults.
+        std::string care;
+        for (const char* key : {"hunger_minutes", "strength_minutes", "poop_minutes", "weight", "hearts"}) {
+            std::string cell = species.get(row, key);
+            if (cell.empty()) continue;
+            char* end = nullptr;
+            double v = std::strtod(cell.c_str(), &end);
+            if (*end) error(where + ": " + key + " must be a number");
+            care += std::string(care.empty() ? "" : ", ") + quote(key) + ": " + number(v);
+        }
+        for (const char* key : {"sleep", "wake"}) {
+            std::string cell = species.get(row, key);
+            if (!cell.empty()) care += std::string(care.empty() ? "" : ", ") + quote(key) + ": " + quote(cell);
+        }
+        if (!care.empty()) o += ",\n      \"care\": { " + care + " }";
 
         // learns: "move@level;move@level"
         std::string learns = species.get(row, "learns"), list;
@@ -269,9 +348,15 @@ bool bake_pack(const std::string& in_dir, const std::string& out_dir, BakeReport
         std::string from = evolutions.get(e, "from"), to = evolutions.get(e, "to");
         if (!stage_of.count(from)) error(evolutions.where(e) + ": unknown 'from' species '" + from + "'");
         if (!stage_of.count(to)) error(evolutions.where(e) + ": unknown 'to' species '" + to + "'");
-        else if (stage_of.count(from) && stage_of[to] <= stage_of[from])
-            r.warnings.push_back(evolutions.where(e) + ": " + to + " is not a later stage than " + from);
+        else if (stage_of.count(from) && stage_of[to] < stage_of[from])
+            r.warnings.push_back(evolutions.where(e) + ": " + to + " is an earlier stage than " + from);
     }
+    // Creatures nothing evolves into (and that aren't eggs) can never be raised.
+    std::set<std::string> reachable(eggs.begin(), eggs.end());
+    for (size_t e = 0; have_evolutions && e < evolutions.rows.size(); ++e) reachable.insert(evolutions.get(e, "to"));
+    for (const auto& [id, st] : stage_of)
+        if (!reachable.count(id))
+            r.warnings.push_back("species.csv: " + id + " is never evolved into, so it only appears as a quest enemy");
     if (eggs.empty() && base["rosters"].is_null()) error("species.csv: no species with stage 'egg', so there is nothing to hatch");
 
     // --- files base.json refers to ---------------------------------------------
