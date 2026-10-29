@@ -21,8 +21,10 @@ std::unique_ptr<Scene> make_moves_scene(Game& game);
 // Shared drawing helpers for full-screen menus.
 std::string format_duration(uint64_t ms);
 void draw_title(Framebuffer& fb, const Theme& t, const std::string& title);
-// Four hearts showing `halves` half hearts (0-8).
-void draw_hearts(Framebuffer& fb, int x, int y, int halves);
+// `hearts` hearts, `halves` of their halves filled.
+void draw_hearts(Framebuffer& fb, int x, int y, int halves, int hearts);
+// Width in pixels of a row of `hearts` hearts.
+constexpr int hearts_width(int hearts) { return hearts * 9 - 2; }
 void draw_footer(Framebuffer& fb, const Theme& t, const std::string& text);
 // Horizontal bar, value/max filled.
 void draw_bar(Framebuffer& fb, int x, int y, int w, int h, int value, int max, Color fill, Color back);

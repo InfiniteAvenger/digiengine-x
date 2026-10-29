@@ -89,10 +89,11 @@ bool use_item_at_home(const Pack& pack, Pet& pet, Home& home, int item, std::str
     if (pet.asleep) return msg = "ZZZ...", false;
     if (e.forever && pet.forever) return msg = "ALREADY FOREVER", false;
     bool only_food = !e.strength && !e.cure && !e.forever && !e.bonus.hp && !e.bonus.atk && !e.bonus.def && !e.bonus.spd;
-    if (e.hunger && pet.hunger >= kHungerHalves && only_food) return msg = "FULL!", false;
+    int hearts = max_hearts(pack, pet);
+    if (e.hunger && pet.hunger >= hearts * 2 && only_food) return msg = "FULL!", false;
 
-    pet.hunger = uint8_t(std::min(kHungerHalves, pet.hunger + e.hunger * 2));  // effects are whole hearts
-    pet.strength = uint8_t(std::min(kMaxHearts, pet.strength + e.strength));
+    pet.hunger = uint8_t(std::min(hearts * 2, pet.hunger + e.hunger * 2));  // effects are whole hearts
+    pet.strength = uint8_t(std::min(hearts, pet.strength + e.strength));
     if (e.hunger) pet.hunger_call = Call{};
     if (e.strength) pet.strength_call = Call{};
     if (e.cure) pet.sick = false;

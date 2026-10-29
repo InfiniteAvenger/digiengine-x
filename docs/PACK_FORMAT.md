@@ -56,6 +56,7 @@ Every field is optional; missing ones use the defaults for the species' stage.
 | `poop_minutes`     | Awake minutes between poops                     | 120           |
 | `sleep`, `wake`    | Local bedtime and wake time, `"HH:MM"`. Equal values mean the creature never sleeps. | 21:00 / 08:00 |
 | `weight`           | Base and minimum weight in grams                | 20            |
+| `hearts`           | Size of the hunger and strength meters (1-5)    | 2             |
 
 Stage defaults (hunger / strength / poop minutes, bedtime, weight):
 

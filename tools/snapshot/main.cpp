@@ -187,7 +187,8 @@ void evolution_checks(FakePlatform& p, const std::string& demo_dir) {
     const uint64_t min = 60'000;
     auto fresh = [&](int species) {
         vpet::Pet pet = vpet::new_pet(pack, species, t0);
-        pet.hunger = pet.strength = vpet::kMaxHearts;  // no calls -> no surprise mistakes
+        pet.strength = uint8_t(vpet::max_hearts(pack, pet));  // full: no calls -> no surprise mistakes
+        pet.hunger = uint8_t(pet.strength * 2);
         return pet;
     };
 
@@ -436,7 +437,7 @@ void settings_checks(const FakePlatform& base, const std::string& demo_dir) {
           "equipped moves survive a save");
 
     // A save from before half hearts stored whole hearts.
-    std::string legacy = "format 1\nspecies blip\nhunger 3\n";
+    std::string legacy = "format 1\nspecies voltwing\nhunger 3\n";  // an adult: 3 hearts
     vpet::Save old;
     check(vpet::read_save(pack, legacy, old) && old.active.hunger == 6, "old whole-heart hunger loads as half hearts");
 }
@@ -510,8 +511,8 @@ int main(int argc, char* argv[]) {
         press(vpet::BTN_B);
         press(vpet::BTN_B);
     }
-    check(pet().hunger == vpet::kHungerHalves, "hunger caps at 4 hearts (8 halves)");
-    check(pet().weight == 13, "eight kibble add 8g");
+    check(pet().hunger == vpet::max_hearts(game->pack(), pet()) * 2, "hunger caps at the form's hearts (1 for an infant)");
+    check(pet().weight == 7, "each kibble eaten adds 1g; refused ones don't");
 
     std::printf("minigame scoring\n");
     {
@@ -701,7 +702,7 @@ int main(int argc, char* argv[]) {
     shot("14_items");
     int hunger_before = pet().hunger;
     press(vpet::BTN_B);  // eat the jam
-    check(vpet::count(game->home(), jam) == 0 && pet().hunger == std::min(int(vpet::kHungerHalves), hunger_before + 4),
+    check(vpet::count(game->home(), jam) == 0 && pet().hunger == std::min(vpet::max_hearts(game->pack(), pet()) * 2, hunger_before + 4),
           "berry jam adds 2 hearts (4 halves)");
     press(vpet::BTN_C);
     press(vpet::BTN_C);
@@ -720,12 +721,12 @@ int main(int argc, char* argv[]) {
         press(vpet::BTN_B);  // kibble
     }
     pet().level = 6;  // test shortcut: know all four moves
-    check(!pet().sick && pet().hunger == vpet::kHungerHalves, "healthy and fed before questing");
+    check(!pet().sick && pet().hunger == vpet::max_hearts(game->pack(), pet()) * 2, "healthy and fed before questing");
     select(3);
     press(vpet::BTN_B);
     shot("15_quest_lobby");
     press(vpet::BTN_B);  // enter floor 1
-    check(pet().hunger == vpet::kHungerHalves - 2, "entering a floor costs a full hunger heart");
+    check(pet().hunger == vpet::max_hearts(game->pack(), pet()) * 2 - 2, "entering a floor costs a full hunger heart");
     run(3000);           // intro messages auto-advance
     shot("16_battle_choose");
     press(vpet::BTN_B);  // BUBBLE: mash minigame

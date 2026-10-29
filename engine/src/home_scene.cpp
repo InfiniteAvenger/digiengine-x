@@ -135,8 +135,9 @@ public:
             fb.draw_text(4, kBottomBarY + 5, s.name, t.ui_text);
             if (!egg) {
                 std::string lv = "LV" + std::to_string(pet.level);
-                fb.draw_text(kScreenW - 40 - Framebuffer::text_width(lv), kBottomBarY + 5, lv, t.accent);
-                draw_hearts(fb, kScreenW - 37, kBottomBarY + 4, pet.hunger);
+                int hearts = max_hearts(game_.pack(), pet), hx = kScreenW - 3 - hearts_width(hearts);
+                fb.draw_text(hx - 4 - Framebuffer::text_width(lv), kBottomBarY + 5, lv, t.accent);
+                draw_hearts(fb, hx, kBottomBarY + 4, pet.hunger, hearts);
             }
         }
     }

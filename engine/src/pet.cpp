@@ -162,8 +162,8 @@ void thaw(Pet& pet, uint64_t now_ms) {
     pet.frozen_ms = 0;
 }
 
-bool feed_kibble(Pet& pet) {
-    if (pet.hunger >= kHungerHalves) return false;
+bool feed_kibble(const Pack& pack, Pet& pet) {
+    if (pet.hunger >= max_hearts(pack, pet) * 2) return false;
     ++pet.hunger;
     ++pet.weight;
     pet.hunger_call = Call{};  // answered now rather than on the next tick
@@ -190,7 +190,7 @@ void toggle_lights(Pet& pet) {
 void finish_training(const Pack& pack, Pet& pet, bool success) {
     ++pet.trainings;
     if (success) pet.effort = uint16_t(pet.effort + 1);
-    if (success && pet.strength < kMaxHearts) {
+    if (success && pet.strength < max_hearts(pack, pet)) {
         ++pet.strength;
         pet.strength_call = Call{};
     }
@@ -292,8 +292,9 @@ bool read_pet(const Pack& pack, Fields& f, const std::string& prefix, Pet& out) 
     for (std::string id; std::getline(moves, id, ',');)
         if (int m = pack.find_move(id); m >= 0) p.moves.push_back(m);
 
-    if (p.hunger > kHungerHalves) p.hunger = kHungerHalves;
-    if (p.strength > kMaxHearts) p.strength = kMaxHearts;
+    int hearts = pack.species[p.species].care.hearts;
+    if (p.hunger > hearts * 2) p.hunger = uint8_t(hearts * 2);
+    if (p.strength > hearts) p.strength = uint8_t(hearts);
     if (p.poop > kMaxPoop) p.poop = kMaxPoop;
     if (p.level < 1) p.level = 1;
     out = p;

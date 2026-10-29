@@ -49,7 +49,8 @@ ESP32 reads straight from flash.
 
 ## Care rules (Phase 2)
 
-- **Hunger / strength:** 0-4 hearts. Hunger moves in half hearts, strength in
+- **Hunger / strength:** meters grow with each stage: 1 heart as an
+  infant, 2 as a child, 3 adult, 4 perfect, 5 ultimate (packs can override). Hunger moves in half hearts, strength in
   whole hearts, each dropping on a per-form timer that only runs while awake.
   Kibble (free, unlimited) adds half a heart and 1g; food items add whole hearts.
   Training (stop the meter in the gold zone) adds a strength heart on a hit

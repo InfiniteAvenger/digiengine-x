@@ -22,8 +22,8 @@ void draw_title(Framebuffer& fb, const Theme& t, const std::string& title) {
     fb.draw_text_centered(3, title, t.ui);
 }
 
-void draw_hearts(Framebuffer& fb, int x, int y, int halves) {
-    for (int i = 0; i < kMaxHearts; ++i) {
+void draw_hearts(Framebuffer& fb, int x, int y, int halves, int hearts) {
+    for (int i = 0; i < hearts; ++i) {
         int frame = halves >= (i + 1) * 2 ? 0 : halves == i * 2 + 1 ? 2 : 1;
         fb.draw_sprite(icons().heart, frame, x + i * 9, y);
     }
@@ -123,9 +123,9 @@ public:
             fb.draw_sprite(s.sprite, 0, kScreenW - 4 - s.sprite.w * 2, 14, 2);
         } else if (page_ == 1) {
             fb.draw_text(kLabelX, 19, "HUNGER", t.accent);
-            draw_hearts(fb, kValueX, 18, pet.hunger);
+            draw_hearts(fb, kValueX, 18, pet.hunger, max_hearts(game_.pack(), pet));
             fb.draw_text(kLabelX, 29, "STRENGTH", t.accent);
-            draw_hearts(fb, kValueX, 28, pet.strength * 2);
+            draw_hearts(fb, kValueX, 28, pet.strength * 2, max_hearts(game_.pack(), pet));
             row(40, "POOP", std::to_string(pet.poop) + "/" + std::to_string(kMaxPoop));
             row(49, "SICK", pet.sick ? "YES" : "NO");
             row(58, "SLEEPING", pet.asleep ? "YES" : "NO");
@@ -200,7 +200,7 @@ public:
         } else if (b == BTN_B) {
             Pet& pet = game_.pet();
             if (cursor_ == 0) {
-                if (feed_kibble(pet)) game_.play_eat(-1);  // the home screen shows the meal
+                if (feed_kibble(game_.pack(), pet)) game_.play_eat(-1);  // the home screen shows the meal
                 else game_.toast("FULL!");
             }
             else game_.toast(give_medicine(pet) ? "ALL BETTER!" : "NOT SICK");
@@ -225,7 +225,7 @@ public:
         fb.draw_text_centered(52, kInfo[cursor_], t.ui_text);
 
         fb.draw_text(kLabelX, 70, "HUNGER", t.accent);
-        draw_hearts(fb, kValueX, 69, pet.hunger);
+        draw_hearts(fb, kValueX, 69, pet.hunger, max_hearts(game_.pack(), pet));
         fb.draw_text(kLabelX, 81, "SICK", t.accent);
         fb.draw_text(kValueX, 81, pet.sick ? "YES" : "NO", t.ui_text);
 
@@ -296,14 +296,14 @@ public:
         } else if (phase_ == Phase::Play) {
             mini_.draw(fb, t, 62, now);
         } else {
-            bool full = strength_before_ >= kMaxHearts;
+            bool full = strength_before_ >= max_hearts(game_.pack(), game_.pet());
             const char* verdict = mini_.mult() >= 1.5f ? "PERFECT!" : mini_.success() ? "GREAT!" : "MISSED...";
             fb.draw_text_centered(66, verdict, mini_.success() ? t.accent : t.ui_text);
             fb.draw_text_centered(76, mini_.success() ? (full ? "STRENGTH IS FULL" : "+1 STRENGTH") : "-1G ANYWAY", dim);
         }
 
         fb.draw_text(kLabelX, 97, "STRENGTH", t.accent);
-        draw_hearts(fb, kValueX, 96, game_.pet().strength * 2);
+        draw_hearts(fb, kValueX, 96, game_.pet().strength * 2, max_hearts(game_.pack(), game_.pet()));
         draw_footer(fb, t, phase_ == Phase::Ready ? "C: QUIT" : phase_ == Phase::Play ? "GO!" : "");
     }
 

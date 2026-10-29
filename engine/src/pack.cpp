@@ -44,6 +44,7 @@ bool read_care(const Json& j, Care& care, std::string& err) {
     minutes("strength_minutes", care.strength_s);
     minutes("poop_minutes", care.poop_s);
     care.weight = uint16_t(j["weight"].int_or(care.weight));
+    care.hearts = uint8_t(std::clamp(j["hearts"].int_or(care.hearts), 1, int(kMaxHeartsCap)));
     for (auto [key, out] : {std::pair<const char*, uint16_t*>{"sleep", &care.sleep_min}, {"wake", &care.wake_min}}) {
         if (j[key].is_null()) continue;
         if (!parse_clock(j[key].str_or(""), *out)) {
@@ -137,14 +138,14 @@ const char* rarity_name(Rarity r) { return kRarityNames[int(r)]; }
 const char* minigame_name(MiniGame g) { return kGameNames[int(g)]; }
 
 Care default_care(Stage s) {
-    //                 hunger  strength  poop    sleep    wake    weight
+    //                 hunger  strength  poop    sleep    wake    weight  hearts
     switch (s) {
-        case Stage::Egg:      return {0, 0, 0, 0, 0, 0};
-        case Stage::Infant:   return {3 * 60, 3 * 60, 3 * 60, 20 * 60, 9 * 60, 5};
-        case Stage::Child:    return {48 * 60, 48 * 60, 120 * 60, 21 * 60, 8 * 60, 20};
-        case Stage::Adult:    return {59 * 60, 59 * 60, 120 * 60, 22 * 60, 8 * 60, 30};
-        case Stage::Perfect:  return {66 * 60, 66 * 60, 120 * 60, 23 * 60, 9 * 60, 40};
-        case Stage::Ultimate: return {75 * 60, 75 * 60, 120 * 60, 23 * 60, 9 * 60, 50};
+        case Stage::Egg:      return {0, 0, 0, 0, 0, 0, 1};
+        case Stage::Infant:   return {3 * 60, 3 * 60, 3 * 60, 20 * 60, 9 * 60, 5, 1};
+        case Stage::Child:    return {48 * 60, 48 * 60, 120 * 60, 21 * 60, 8 * 60, 20, 2};
+        case Stage::Adult:    return {59 * 60, 59 * 60, 120 * 60, 22 * 60, 8 * 60, 30, 3};
+        case Stage::Perfect:  return {66 * 60, 66 * 60, 120 * 60, 23 * 60, 9 * 60, 40, 4};
+        case Stage::Ultimate: return {75 * 60, 75 * 60, 120 * 60, 23 * 60, 9 * 60, 50, 5};
     }
     return {};
 }

@@ -28,6 +28,8 @@ struct EvolveRule {
     int min_quest_floor = 0;      // best floor ever cleared
 };
 
+constexpr int kMaxHeartsCap = 5;  // the most hearts any form can have
+
 // How fast a form's needs change. Timers count awake seconds only.
 struct Care {
     uint32_t hunger_s = 0;    // seconds per hunger heart lost
@@ -36,6 +38,7 @@ struct Care {
     uint16_t sleep_min = 0;   // bedtime, minutes after local midnight
     uint16_t wake_min = 0;    // wake time; equal to sleep_min means never sleeps
     uint16_t weight = 0;      // base (minimum) weight in grams
+    uint8_t hearts = 4;       // size of the hunger and strength meters
 };
 
 // Defaults per stage, used for any care field a pack leaves out.

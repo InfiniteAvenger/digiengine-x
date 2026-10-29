@@ -329,7 +329,7 @@ void QuestScene::draw(Framebuffer& fb) {
         case Phase::Cleared:
             fb.draw_text_centered(y, "FLOOR " + std::to_string(pet.run.floor - 1) + " CLEAR!", t.accent);
             fb.draw_text_centered(y + 10, "HUNGER LEFT", dim);
-            draw_hearts(fb, (kScreenW - 36) / 2, y + 18, pet.hunger);
+            draw_hearts(fb, (kScreenW - hearts_width(max_hearts(pack, pet))) / 2, y + 18, pet.hunger, max_hearts(pack, pet));
             draw_footer(fb, t, "B: NEXT FLOOR  C: HOME");
             break;
         case Phase::Over:

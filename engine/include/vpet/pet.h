@@ -7,8 +7,6 @@
 
 namespace vpet {
 
-constexpr int kMaxHearts = 4;
-constexpr int kHungerHalves = kMaxHearts * 2;  // hunger is tracked in half hearts
 constexpr int kMaxPoop = 4;
 constexpr uint32_t kCallTimeoutS = 10 * 60;  // an ignored call becomes a care mistake
 constexpr int kCryoSlots = 2;
@@ -43,8 +41,8 @@ struct Pet {
     uint64_t stage_ms = 0;  // when the current form was reached
     uint64_t sim_ms = 0;    // simulated up to this time
 
-    uint8_t hunger = 0;    // half hearts, 0..kHungerHalves
-    uint8_t strength = 0;  // hearts, 0..kMaxHearts
+    uint8_t hunger = 0;    // half hearts, 0..max_hearts() * 2
+    uint8_t strength = 0;  // hearts, 0..max_hearts()
     uint8_t poop = 0;
     uint16_t weight = 0;
     uint16_t care_mistakes = 0;
@@ -73,6 +71,10 @@ struct Pet {
 
     bool needs_attention() const { return hunger_call.active() || strength_call.active() || lights_call.active(); }
 };
+
+// Size of the current form's hunger and strength meters, in hearts. Hunger
+// is tracked in half hearts, so its full value is twice this.
+inline int max_hearts(const Pack& pack, const Pet& pet) { return pack.species[pet.species].care.hearts; }
 
 // Shared by every pet: the bag and the garden.
 struct Home {
@@ -121,7 +123,7 @@ void freeze(Pet& pet, uint64_t now_ms);
 void thaw(Pet& pet, uint64_t now_ms);
 
 // Care actions. Each returns false when it has no effect (full, not sick...).
-bool feed_kibble(Pet& pet);
+bool feed_kibble(const Pack& pack, Pet& pet);
 bool give_medicine(Pet& pet);
 bool clean_up(Pet& pet);
 void toggle_lights(Pet& pet);
