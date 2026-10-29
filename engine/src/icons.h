@@ -12,6 +12,7 @@ struct Icons {
     Sprite menu;       // 9x9 masks, one frame per home menu slot
     Sprite kibble;     // 8x8 bowl, the free food
     Sprite forever;    // 9x5 infinity badge for Forever Partners
+    Sprite nodes;      // 9x9 masks for quest paths: fight, rest, forage, boss, home
 };
 
 const Icons& icons();

@@ -12,6 +12,7 @@
 #include <sstream>
 #include <string>
 #include <tuple>
+#include "vpet/combat.h"
 #include "vpet/game.h"
 #include "baker.h"
 #include "vpet/minigame.h"
@@ -325,9 +326,9 @@ void enemy_checks(FakePlatform& p, const std::string& demo_dir) {
           "creature enemies use their family table");
     check(king && king->drops[0].item == pack.find_item("core_shard") && king->drops[0].chance == 0.5f,
           "explicit drops override the family table");
-    check(volt && vpet::enemy_stats(*volt, 10, false).hp == 60 && vpet::enemy_stats(*volt, 12, false).hp == 78 &&
-              vpet::enemy_stats(*volt, 12, true).hp == 117,
-          "enemies scale from the start of their tier; bosses get +50% HP");
+    check(volt && vpet::enemy_stats(*volt, 10, false).hp == 60 && vpet::enemy_stats(*volt, 12, false).hp == 75 &&
+              vpet::enemy_stats(*volt, 12, true).hp == 112 && vpet::enemy_stats(*volt, 12, false).atk == 17,
+          "enemies scale x1.12 HP / x1.09 attack per floor from their tier's start; bosses get +50% HP");
 
     // Default tiers reserve super ultimates for deep floors.
     bool deep_only = false;
@@ -583,6 +584,67 @@ void settings_checks(const FakePlatform& base, const std::string& demo_dir) {
     check(vpet::read_save(pack, legacy, old) && old.active.hunger == 6, "old whole-heart hunger loads as half hearts");
 }
 
+// Path map, combat rules, forage, the 7-sided die and minigame name aliases.
+void combat_checks(FakePlatform& p, const std::string& demo_dir) {
+    std::printf("combat module and path map\n");
+    vpet::Pack pack;
+    std::string err;
+    vpet::load_pack(p, demo_dir, pack, err);
+
+    bool boss_only = vpet::path_choices(10, 1) == std::vector<vpet::Node>{vpet::Node::Boss} &&
+                     vpet::path_choices(40, 7) == std::vector<vpet::Node>{vpet::Node::Boss};
+    bool fight_first = true, rest_in_threes = true, saw_two = false, saw_three = false, saw_forage = false;
+    for (uint32_t r = 0; r < 300; ++r) {
+        std::vector<vpet::Node> n = vpet::path_choices(int(1 + r % 9), r);
+        fight_first &= n.size() >= 2 && n[0] == vpet::Node::Battle;
+        if (n.size() == 3) {
+            saw_three = true;
+            rest_in_threes &= std::find(n.begin(), n.end(), vpet::Node::Campfire) != n.end();
+        }
+        saw_two |= n.size() == 2;
+        saw_forage |= std::find(n.begin(), n.end(), vpet::Node::Forage) != n.end();
+    }
+    check(boss_only, "paths: every 10th floor offers only the boss");
+    check(fight_first && saw_two && saw_three && saw_forage,
+          "paths: 2- and 3-way choices, a fight always first, forage spots appear");
+    check(rest_in_threes, "paths: 3-way choices always include a campfire (so a run can pause)");
+
+    vpet::Fighter a{{30, 10, 8, 5}, "", 0}, d{{30, 10, 8, 5}, "", 0};
+    vpet::Hit plain = vpet::resolve_hit(pack, 12, 1.0f, a, d);
+    vpet::Fighter buffed = a;
+    buffed.buff_floors = 2;
+    check(plain.damage == vpet::damage(12, 1.0f, 10, 8) && vpet::resolve_hit(pack, 12, 1.0f, buffed, d).damage > plain.damage,
+          "combat: hits use the damage formula; an attack buff hits harder");
+    check(vpet::pet_moves_first({1, 1, 1, 5}, {1, 1, 1, 5}) && !vpet::pet_moves_first({1, 1, 1, 4}, {1, 1, 1, 5}),
+          "combat: faster acts first; ties go to the pet");
+
+    bool always_found = true;
+    for (uint32_t s = 1; s < 50; ++s) always_found &= !vpet::forage(pack, 1, s * 7919u).empty();
+    check(always_found, "forage: always finds at least one thing");
+
+    vpet::Minigame die;
+    bool faces_ok = true;
+    int seen_max = 0, seen_min = 99;
+    for (uint32_t r = 0; r < 200; ++r) {
+        die.start(vpet::MiniGame::Dice, 0, 1);
+        die.press(vpet::BTN_B, 100, r * 2654435761u);
+        die.update(1100);
+        faces_ok &= die.die() >= 1 && die.die() <= 7 && die.mult() == vpet::Minigame::kDieMult[die.die() - 1];
+        seen_max = std::max(seen_max, die.die());
+        seen_min = std::min(seen_min, die.die());
+    }
+    check(faces_ok && seen_min == 1 && seen_max == 7 && vpet::Minigame::kDieMult[6] == 1.5f &&
+              vpet::Minigame::kDieMult[0] == 0.5f,
+          "dice: a 7-sided die; 1 glances (x0.5), 6-7 are critical (x1.5)");
+
+    vpet::MiniGame g;
+    check(vpet::parse_minigame("precision_slider", g) && g == vpet::MiniGame::Timing &&
+              vpet::parse_minigame("rapid_mash", g) && g == vpet::MiniGame::Mash &&
+              vpet::parse_minigame("command_sequence", g) && g == vpet::MiniGame::Sequence &&
+              vpet::parse_minigame("dice_gamble", g) && g == vpet::MiniGame::Dice && !vpet::parse_minigame("nope", g),
+          "minigame names: the long aliases load as the four games");
+}
+
 // --validate: load any pack through the engine and check it can be played.
 int validate_pack(const std::string& dir) {
     std::printf("validating %s\n", dir.c_str());
@@ -650,6 +712,7 @@ int main(int argc, char* argv[]) {
     enemy_checks(p, argv[1]);
     cryo_checks(p, argv[1]);
     settings_checks(p, argv[1]);
+    combat_checks(p, argv[1]);
     auto game = std::make_unique<vpet::Game>(p);
     if (!game->init(argv[1])) return 1;
     std::string out = argv[2];
@@ -919,7 +982,9 @@ int main(int argc, char* argv[]) {
     select(3);
     press(vpet::BTN_B);
     shot("15_quest_lobby");
-    press(vpet::BTN_B);  // enter floor 1
+    press(vpet::BTN_B);  // open the path map
+    shot("15b_path_map");
+    press(vpet::BTN_A);  // the first path is always a fight
     check(pet().hunger == vpet::max_hearts(game->pack(), pet()) * 2 - 1, "entering a floor costs half a hunger heart");
     run(3000);           // intro messages auto-advance
     shot("16_battle_choose");

@@ -198,6 +198,62 @@ kbbbbbbk
 ..kkkk..
 )";
 
+// Quest path cards, 9x9 masks: fight, rest, forage, boss, home.
+constexpr const char* kNodes = R"(size 9 9
+palette
+x ffffff
+frame
+x.......x
+.x.....x.
+..x...x..
+...x.x...
+....x....
+...x.x...
+.xx...xx.
+.xx...xx.
+x.......x
+frame
+....x....
+...xx....
+...xxx...
+..xxxx.x.
+..xx.xxx.
+...xxx...
+.x.....x.
+..xx.xx..
+....x....
+frame
+.........
+.xx...xx.
+xxxx.xxxx
+.xxx.xxx.
+...x.x...
+....x....
+....x....
+..xxxxx..
+.xxxxxxx.
+frame
+x...x...x
+xx.xxx.xx
+xxxxxxxxx
+xxxxxxxxx
+.........
+.xxxxxxx.
+.x.x.x.x.
+.xxxxxxx.
+.........
+frame
+....x....
+...xxx...
+..xxxxx..
+.xxxxxxx.
+xxxxxxxxx
+.xx...xx.
+.xx.x.xx.
+.xx.x.xx.
+.xxxxxxx.
+)";
+
 // Forever Partner badge: a small infinity sign.
 constexpr const char* kForever = R"(size 9 5
 palette
@@ -214,7 +270,7 @@ y..y.y..y
 
 const Icons& icons() {
     static const Icons i{load(kPoop), load(kHeart),  load(kAttention), load(kSick),
-                         load(kMenu), load(kKibble), load(kForever)};
+                         load(kMenu), load(kKibble), load(kForever), load(kNodes)};
     return i;
 }
 

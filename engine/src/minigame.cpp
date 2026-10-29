@@ -61,7 +61,7 @@ void Minigame::press(Button b, uint64_t now_ms, uint32_t rnd) {
             if (b == BTN_B && !rolled_) {
                 rolled_ = true;
                 roll_at_ = now_ms;
-                die_ = int(rnd % 6) + 1;
+                die_ = int(rnd % uint32_t(kDieFaces)) + 1;
             }
             break;
     }
@@ -84,7 +84,7 @@ void Minigame::update(uint64_t now_ms) {
             if (t >= tune_.seq_ms) finish(0.5f + 0.25f * float(seq_pos_));
             break;
         case MiniGame::Dice:
-            if (rolled_ && now_ms - roll_at_ >= 900) finish(0.25f + 0.2f * float(die_));
+            if (rolled_ && now_ms - roll_at_ >= 900) finish(kDieMult[die_ - 1]);
             else if (!rolled_ && t > 5000) finish(0.45f);
             break;
     }
@@ -127,9 +127,16 @@ void Minigame::draw(Framebuffer& fb, const Theme& t, int y, uint64_t now_ms) con
         }
         case MiniGame::Dice: {
             fb.draw_text_centered(y, rolled_ ? "ROLLED!" : "B: ROLL THE DIE", t.accent);
-            int face = rolled_ && now_ms - roll_at_ > 400 ? die_ : int((now_ms / 70) % 6) + 1;
-            fb.fill_rect(52, y + 9, 16, 16, t.ui_text);
-            fb.draw_text(58, y + 15, std::to_string(face), t.ui);
+            int face = rolled_ && now_ms - roll_at_ > 400 ? die_ : int((now_ms / 70) % uint64_t(kDieFaces)) + 1;
+            // A 7-sided die drawn with pips: two columns of three plus a center.
+            int dx = 50, dy = y + 8;
+            fb.panel(dx, dy, 20, 18, t.ui_text, mix(t.ui_text, t.ui, 120));
+            static const uint16_t kPips[kDieFaces] = {0x10, 0x44, 0x54, 0x145, 0x155, 0x16D, 0x17D};
+            // bit layout:  0 1 2 / 3 4 5 / 6 7 8 over a 3x3 grid (4 = center)
+            for (int b = 0; b < 9; ++b)
+                if (kPips[face - 1] & (1 << b)) fb.fill_rect(dx + 4 + (b % 3) * 5, dy + 3 + (b / 3) * 5, 2, 2, t.ui);
+            if (rolled_ && now_ms - roll_at_ > 400)
+                fb.draw_text(74, y + 14, die_ >= 6 ? "CRITICAL!" : die_ <= 2 ? "GLANCE" : "", die_ >= 6 ? t.accent : t.ui_text);
             break;
         }
     }

@@ -25,6 +25,9 @@ struct MinigameTuning {
 class Minigame {
 public:
     static constexpr int kSeqLen = 4;
+    // Dice: a 7-sided die. 1-2 glance off, 6-7 are critical hits.
+    static constexpr int kDieFaces = 7;
+    static constexpr float kDieMult[kDieFaces] = {0.5f, 0.6f, 0.85f, 1.0f, 1.15f, 1.5f, 1.5f};
 
     // `seed` places the timing zone and picks the sequence.
     void start(MiniGame type, uint64_t now_ms, uint32_t seed, MinigameTuning tuning = MinigameTuning::battle());
@@ -42,6 +45,7 @@ public:
     int zone_start() const { return zone_; }
     int cursor() const { return meter_; }
     int sequence(int i) const { return seq_[i]; }  // 0=A 1=B 2=C
+    int die() const { return die_; }               // last roll, 1-7
 
     // Instruction line at y, widget below; fits in 30 rows.
     void draw(Framebuffer& fb, const Theme& t, int y, uint64_t now_ms) const;

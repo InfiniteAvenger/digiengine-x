@@ -1,11 +1,14 @@
-// Infinite quest. Each floor is one battle; HP carries between floors and the
-// player can head home between floors without losing the run. Fainting ends
-// the run (back to floor 1) and the pet comes home sick, but keeps its level,
-// items and everything at home.
+// Infinite quest. Before each floor the player picks a path (A/B/C): a fight,
+// a campfire to rest or pause, a forage spot, or every 10th floor the boss.
+// HP carries between floors and going home keeps the run. Fainting ends the
+// run (back to floor 1) and the pet comes home sick, but keeps its level,
+// items and everything at home. The rules live in vpet/combat.h.
 #include <algorithm>
 #include <cctype>
 #include <deque>
+#include "icons.h"
 #include "scenes.h"
+#include "vpet/combat.h"
 #include "vpet/minigame.h"
 #include "vpet/rpg.h"
 
@@ -17,7 +20,7 @@ constexpr int kHorizon = 66;
 constexpr int kPanelY = 80;
 constexpr uint64_t kMessageMs = 1400;
 
-enum class Phase { Lobby, Messages, Choose, Items, Mini, Cleared, Over };
+enum class Phase { Lobby, Map, Messages, Choose, Items, Mini, Cleared, Campfire, Over };
 
 class QuestScene : public Scene {
 public:
@@ -26,7 +29,17 @@ public:
     void on_press(Button b) override {
         switch (phase_) {
             case Phase::Lobby:
-                if (b == BTN_B) start_floor();
+                if (b == BTN_B) open_map();
+                else if (b == BTN_C) game_.pop();
+                break;
+            case Phase::Map: {
+                size_t pick = b == BTN_A ? 0 : b == BTN_B ? 1 : 2;
+                if (pick < nodes_.size()) take_node(nodes_[pick]);
+                else if (b == BTN_C) game_.pop();  // a two-way choice leaves C for HOME
+                break;
+            }
+            case Phase::Campfire:
+                if (b == BTN_B) open_map();
                 else if (b == BTN_C) game_.pop();
                 break;
             case Phase::Messages:
@@ -43,7 +56,7 @@ public:
                 break;
             case Phase::Mini: mini_press(b); break;
             case Phase::Cleared:
-                if (b == BTN_B) start_floor();
+                if (b == BTN_B) open_map();
                 else if (b == BTN_C) game_.pop();
                 break;
             case Phase::Over: game_.pop(); break;
@@ -59,6 +72,40 @@ public:
 
 private:
     // --- Flow -----------------------------------------------------------------
+
+    void open_map() {
+        nodes_ = path_choices(game_.pet().run.floor, game_.rand());
+        phase_ = Phase::Map;
+    }
+
+    void take_node(Node n) {
+        const Pack& pack = game_.pack();
+        Pet& pet = game_.pet();
+        switch (n) {
+            case Node::Battle:
+            case Node::Boss: start_floor(); break;
+            case Node::Campfire: {
+                Stats st = pet_stats(pack, pet);
+                int hp = pet.run.hp < 0 ? st.hp : pet.run.hp;
+                int healed = std::min(st.hp, hp + st.hp * kCampfireHealPercent / 100);
+                pet.run.hp = healed;
+                ++pet.run.floor;  // resting moves the run along
+                say({"A QUIET CAMPFIRE...", "+" + std::to_string(healed - hp) + " HP"}, Phase::Campfire);
+                break;
+            }
+            case Node::Forage: {
+                std::vector<std::string> msgs{"SEARCHING THE AREA..."};
+                for (int item : forage(pack, pet.run.floor, game_.rand())) {
+                    add_item(game_.home(), item, 1);
+                    msgs.push_back("FOUND " + pack.items[item].name + "!");
+                }
+                ++pet.run.floor;
+                open_map();  // prepare the next choice, shown after the messages
+                say(msgs, Phase::Map);
+                break;
+            }
+        }
+    }
 
     void start_floor() {
         const Pack& pack = game_.pack();
@@ -150,27 +197,30 @@ private:
         auto pet_turn = [&] {
             if (move < 0) return;
             const Move& m = pack.moves[move];
-            int atk = pet.run.atk_buff ? ps_.atk * 5 / 4 : ps_.atk;
-            float adv = attribute_mult(pack, s.attribute, e.attribute);
-            int dmg = damage(m.power, mult * adv, atk, es_.def);
+            Hit h = resolve_hit(pack, m.power, mult, {ps_, s.attribute, pet.run.atk_buff}, {es_, e.attribute, 0});
             game_.sfx(mult >= 1.1f ? Game::Sfx::Hit : Game::Sfx::Miss);
-            ehp_ -= dmg;
-            const char* rating = mult >= 1.4f ? "PERFECT! " : mult >= 1.1f ? "GREAT! " : mult < 0.75f ? "WEAK... " : "";
+            ehp_ -= h.damage;
+            bool dice = mini_.type() == MiniGame::Dice;
+            const char* rating = dice && mini_.die() >= 6 ? "CRITICAL! "
+                                 : dice && mini_.die() <= 2 ? "GLANCING. "
+                                 : mult >= 1.4f            ? "PERFECT! "
+                                 : mult >= 1.1f            ? "GREAT! "
+                                 : mult < 0.75f            ? "WEAK... "
+                                                           : "";
             msgs.push_back(s.name + " USED " + m.name + "!");
-            const char* edge = adv > 1.0f ? "ADVANTAGE! " : adv < 1.0f ? "RESISTED. " : "";
-            msgs.push_back(std::string(rating) + edge + std::to_string(dmg) + " DAMAGE");
+            const char* edge = h.advantage > 1.0f ? "ADVANTAGE! " : h.advantage < 1.0f ? "RESISTED. " : "";
+            msgs.push_back(std::string(rating) + edge + std::to_string(h.damage) + " DAMAGE");
         };
         auto enemy_turn = [&] {
             const Move& m = pack.moves[e.moves[game_.rand() % e.moves.size()]];
             float roll = 0.8f + float(game_.rand() % 41) / 100.0f;
-            int def = pet.run.def_buff ? ps_.def * 5 / 4 : ps_.def;
-            int dmg = damage(m.power, roll * attribute_mult(pack, e.attribute, s.attribute), es_.atk, def);
-            pet.run.hp -= dmg;
+            Hit h = resolve_hit(pack, m.power, roll, {es_, e.attribute, 0}, {ps_, s.attribute, pet.run.def_buff});
+            pet.run.hp -= h.damage;
             msgs.push_back(e.name + " USED " + m.name + "!");
-            msgs.push_back(s.name + " TOOK " + std::to_string(dmg));
+            msgs.push_back(s.name + " TOOK " + std::to_string(h.damage));
         };
 
-        if (move >= 0 && ps_.spd >= es_.spd) {
+        if (move >= 0 && pet_moves_first(ps_, es_)) {
             pet_turn();
             if (ehp_ > 0) enemy_turn();
         } else {
@@ -192,7 +242,7 @@ private:
         uint32_t xp = floor_xp(floor);
         msgs.push_back("+" + std::to_string(xp) + " XP");
         gain_xp(pack, pet, xp, msgs);
-        for (int item : roll_drops(e, floor, [this] { return game_.rand(); })) {
+        for (int item : roll_drops(pack, e, floor, [this] { return game_.rand(); })) {
             add_item(game_.home(), item, 1);
             msgs.push_back("GOT " + pack.items[item].name + "!");
         }
@@ -236,6 +286,7 @@ private:
     std::deque<std::string> queue_;
     uint64_t msg_until_ = 0;
 
+    std::vector<Node> nodes_;  // the path choices for the next floor
     int enemy_ = -1;
     bool boss_ = false;
     Stats es_, ps_;
@@ -262,7 +313,8 @@ void QuestScene::draw(Framebuffer& fb) {
     std::string best = "BEST " + std::to_string(pet.run.best);
     fb.draw_text(kScreenW - 4 - Framebuffer::text_width(best), 3, best, t.ui_text);
 
-    bool fighting = phase_ != Phase::Lobby && phase_ != Phase::Over && enemy_ >= 0;
+    bool fighting = phase_ != Phase::Lobby && phase_ != Phase::Over && phase_ != Phase::Map &&
+                    phase_ != Phase::Campfire && enemy_ >= 0;
     int bob = int((now / 350) % 2);
     if (fighting && ehp_ > 0) {
         const Enemy& e = pack.enemies[enemy_];
@@ -294,9 +346,34 @@ void QuestScene::draw(Framebuffer& fb) {
     switch (phase_) {
         case Phase::Lobby:
             fb.draw_text(6, y, "HP " + std::to_string(hp) + "/" + std::to_string(ps.hp), t.ui_text);
-            fb.draw_text(6, y + 9, "EACH FLOOR: HALF A HEART", dim);
+            fb.draw_text(6, y + 9, "FIGHTS COST HALF A HEART", dim);
             fb.draw_text(6, y + 18, "LOSE AND THE RUN RESETS", dim);
             draw_footer(fb, t, "B: ENTER  C: HOME");
+            break;
+        case Phase::Map: {
+            fb.draw_text(4, y - 2, "FLOOR " + std::to_string(pet.run.floor) + ": PICK A PATH", t.accent);
+            // One card per choice; a two-way choice adds HOME on C.
+            const int kCardW = 36, kCardY = y + 6, kCardH = 28;
+            for (int i = 0; i < 3; ++i) {
+                bool home = i >= int(nodes_.size());
+                if (home && (i != 2 || nodes_.size() == 3)) continue;
+                int frame = home ? 4 : int(nodes_[size_t(i)]);
+                const char* label = home ? "HOME" : node_label(nodes_[size_t(i)]);
+                bool boss = !home && nodes_[size_t(i)] == Node::Boss;
+                int x = 3 + i * (kCardW + 3);
+                fb.panel(x, kCardY, kCardW, kCardH, mix(t.ui, t.ui_text, 16), boss ? t.accent : mix(t.ui, t.ui_text, 45));
+                fb.panel(x + 2, kCardY + 2, 7, 8, t.accent, mix(t.accent, rgb(0, 0, 0), 80));
+                fb.draw_text(x + 4, kCardY + 3, std::string(1, char('A' + i)), t.ui);
+                fb.draw_mask(icons().nodes, frame, x + (kCardW - 9) / 2, kCardY + 6, boss ? t.accent : t.ui_text);
+                fb.draw_text(x + (kCardW - Framebuffer::text_width(label)) / 2, kCardY + 19, label,
+                             boss ? t.accent : mix(t.ui_text, t.ui, 30));
+            }
+            break;
+        }
+        case Phase::Campfire:
+            fb.draw_text_centered(y + 2, "RESTED BY THE FIRE", t.accent);
+            fb.draw_text_centered(y + 12, "HP " + std::to_string(hp) + "/" + std::to_string(ps.hp), t.ui_text);
+            draw_footer(fb, t, "B: ONWARD  C: PAUSE + HOME");
             break;
         case Phase::Messages: {
             if (queue_.empty()) break;

@@ -1,5 +1,6 @@
 #include "vpet/rpg.h"
 #include <algorithm>
+#include <cmath>
 
 namespace vpet {
 
@@ -158,9 +159,12 @@ int harvest(const Pack& pack, Home& home, int plot, uint64_t now_ms, uint32_t ro
 // --- Quest --------------------------------------------------------------------
 
 Stats enemy_stats(const Enemy& e, int floor, bool boss) {
+    // Compounding growth, counted from the first floor of the enemy's own tier
+    // so each tier starts at its base stats rather than at floor-1 stats grown
+    // dozens of times.
     int above = std::max(0, floor - e.min_floor);
-    auto grow = [&](int v) { return v + v * 15 * above / 100; };
-    Stats s{grow(e.stats.hp), grow(e.stats.atk), grow(e.stats.def), grow(e.stats.spd)};
+    auto grow = [&](int v, double rate) { return int(double(v) * std::pow(rate, above)); };
+    Stats s{grow(e.stats.hp, 1.12), grow(e.stats.atk, 1.09), grow(e.stats.def, 1.06), grow(e.stats.spd, 1.06)};
     if (boss) s.hp += s.hp / 2;
     return s;
 }

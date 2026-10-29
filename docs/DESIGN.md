@@ -68,10 +68,19 @@ ESP32 reads straight from flash.
 
 ## Quest, garden and economy
 
-- **Quest:** each floor is one battle and costs half a hunger heart. HP carries
-  between floors; the player can go home between floors and resume later.
-  Fainting resets the run to floor 1 and the pet comes home sick, keeping its
-  level, items and home. Every 10th floor is a boss.
+- **Quest paths:** before each floor the player picks a path with A/B/C: a
+  **fight** (half a hunger heart), a **campfire** (heal 30% HP, then go on or
+  pause and go home), or a **forage** spot (materials and seeds). Every 10th
+  floor is the **boss**. Choices are 2- or 3-way; a fight is always offered,
+  a 3-way choice always includes a campfire, and a 2-way choice puts HOME on
+  C. HP carries between floors. Fainting resets the run to floor 1 and the pet
+  comes home sick, keeping its level, items and home.
+- **Scaling:** enemy HP x1.12 and attack x1.09 per floor (defense and speed
+  x1.06), counted from the first floor of the enemy's tier. Rare and epic
+  drops gain +4% per floor, others +2%.
+- **Dice:** a 7-sided die; 1-2 glance off (x0.5, x0.6), 6-7 are critical
+  (x1.5). Minigame names `precision_slider`, `rapid_mash`,
+  `command_sequence` and `dice_gamble` also work in packs.
 - **Battle:** turn order by speed. Picking a move starts its minigame; the
   result (x0.5 to x1.5) scales damage `power * mult * atk / def / 2 + 1`.
   Using an item gives the enemy a free turn.

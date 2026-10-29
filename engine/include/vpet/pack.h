@@ -98,6 +98,9 @@ struct Crop {
 // The minigame that charges a move.
 enum class MiniGame : uint8_t { Timing, Mash, Sequence, Dice };
 const char* minigame_name(MiniGame g);
+// "timing", "mash", "sequence", "dice", or the longer "precision_slider",
+// "rapid_mash", "command_sequence", "dice_gamble".
+bool parse_minigame(const std::string& s, MiniGame& out);
 
 struct Move {
     std::string id, name;
@@ -172,6 +175,7 @@ struct Pack {
     std::vector<Enemy> enemies;  // hand-written ones, then one per eligible creature
     std::vector<std::pair<std::string, std::vector<Drop>>> family_drops;
     std::vector<EnemyTier> tiers;
+    std::vector<Drop> forage;  // what forage nodes find; empty = every family table
     // Attribute advantages: name -> the attributes it beats. Empty = none.
     std::vector<std::pair<std::string, std::vector<std::string>>> attributes;
     std::vector<std::pair<int, int>> start_items;  // given with a new egg

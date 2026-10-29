@@ -139,6 +139,17 @@ const char* stage_label(Stage s) { return kStageLabels[int(s)]; }
 const char* rarity_name(Rarity r) { return kRarityNames[int(r)]; }
 const char* minigame_name(MiniGame g) { return kGameNames[int(g)]; }
 
+bool parse_minigame(const std::string& s, MiniGame& out) {
+    int i = index_of(kGameNames, s);
+    // Longer descriptive names work too.
+    if (s == "precision_slider") i = int(MiniGame::Timing);
+    else if (s == "rapid_mash") i = int(MiniGame::Mash);
+    else if (s == "command_sequence") i = int(MiniGame::Sequence);
+    else if (s == "dice_gamble") i = int(MiniGame::Dice);
+    if (i >= 0) out = MiniGame(i);
+    return i >= 0;
+}
+
 Care default_care(Stage s) {
     //                 hunger  strength  poop    sleep    wake    weight  hearts
     switch (s) {
@@ -241,9 +252,10 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
         m.id = moves[i]["id"].str_or("");
         m.name = moves[i]["name"].str_or(m.id);
         m.power = moves[i]["power"].int_or(10);
-        int g = index_of(kGameNames, moves[i]["game"].str_or("timing"));
+        MiniGame game;
+        int g = parse_minigame(moves[i]["game"].str_or("timing"), game) ? int(game) : -1;
         if (m.id.empty() || g < 0) {
-            err = "move '" + m.id + "': missing id or unknown game (timing, mash, sequence, dice)";
+            err = "move '" + m.id + "': missing id or unknown game (timing/precision_slider, mash/rapid_mash, sequence/command_sequence, dice/dice_gamble)";
             return false;
         }
         m.game = MiniGame(g);
@@ -359,6 +371,8 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
         if (!read_drops(families[i]["drops"], "family " + families.key(i), drops)) return false;
         out.family_drops.push_back({families.key(i), std::move(drops)});
     }
+    if (!read_drops(root["forage"], "forage", out.forage)) return false;
+
     auto family_table = [&](const std::string& family) -> const std::vector<Drop>* {
         for (const auto& [name, drops] : out.family_drops)
             if (name == family) return &drops;
