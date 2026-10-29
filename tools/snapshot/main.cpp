@@ -726,7 +726,7 @@ int main(int argc, char* argv[]) {
     press(vpet::BTN_B);
     shot("15_quest_lobby");
     press(vpet::BTN_B);  // enter floor 1
-    check(pet().hunger == vpet::max_hearts(game->pack(), pet()) * 2 - 2, "entering a floor costs a full hunger heart");
+    check(pet().hunger == vpet::max_hearts(game->pack(), pet()) * 2 - 1, "entering a floor costs half a hunger heart");
     run(3000);           // intro messages auto-advance
     shot("16_battle_choose");
     press(vpet::BTN_B);  // BUBBLE: mash minigame

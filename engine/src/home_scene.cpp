@@ -178,7 +178,7 @@ private:
                 break;
             case M_QUEST:
                 if (!can_act(false)) break;
-                if (pet.hunger < 2) game_.toast("TOO HUNGRY");  // a floor costs a full heart
+                if (pet.hunger < 1) game_.toast("TOO HUNGRY");  // a floor costs half a heart
                 else game_.push(make_quest_scene(game_));
                 break;
             case M_GARDEN: game_.push(make_garden_scene(game_)); break;

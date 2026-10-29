@@ -68,7 +68,7 @@ ESP32 reads straight from flash.
 
 ## Quest, garden and economy
 
-- **Quest:** each floor is one battle and costs 1 hunger heart. HP carries
+- **Quest:** each floor is one battle and costs half a hunger heart. HP carries
   between floors; the player can go home between floors and resume later.
   Fainting resets the run to floor 1 and the pet comes home sick, keeping its
   level, items and home. Every 10th floor is a boss.
