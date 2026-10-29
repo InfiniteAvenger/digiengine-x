@@ -16,7 +16,7 @@ struct MinigameTuning {
     uint64_t seq_ms = 3500;    // sequence: time for the whole combo
 
     static MinigameTuning battle() { return {}; }
-    static MinigameTuning training() { return {22, 6, 850, 9, 2500, 5000}; }
+    static MinigameTuning training() { return {26, 8, 850, 9, 2500, 5000}; }
 };
 
 // One 3-button charge minigame, shared by training and quest moves. Its
@@ -54,6 +54,7 @@ private:
     uint64_t start_ = 0, roll_at_ = 0;
     int meter_ = 0, zone_ = 50, mash_ = 0, seq_pos_ = 0, die_ = 1;
     int seq_[kSeqLen] = {};
+    Button last_mash_ = Button(0);  // mash: the last button that counted
     bool rolled_ = false, done_ = false;
     float mult_ = 1.0f;
 };

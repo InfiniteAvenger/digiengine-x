@@ -544,11 +544,23 @@ int main(int argc, char* argv[]) {
         auto mash = [](int presses) {
             Minigame m;
             m.start(vpet::MiniGame::Mash, 0, 1);
-            for (int i = 0; i < presses; ++i) m.press(vpet::BTN_A, 100 + i * 100, 0);
+            for (int i = 0; i < presses; ++i) m.press(i % 2 ? vpet::BTN_B : vpet::BTN_A, 100 + i * 100, 0);
             m.update(vpet::MinigameTuning::battle().mash_ms);
             return m;
         };
-        check(mash(11).success() && !mash(5).success(), "mash: 11 presses succeed, 5 don't");
+        check(mash(11).success() && !mash(5).success(), "mash: 11 alternating presses succeed, 5 don't");
+        Minigame one;
+        one.start(vpet::MiniGame::Mash, 0, 1);
+        for (int i = 0; i < 30; ++i) one.press(vpet::BTN_A, 100 + i * 50, 0);
+        one.update(vpet::MinigameTuning::battle().mash_ms);
+        check(!one.success(), "mash: hammering one button doesn't count");
+        bool repeats = false;
+        for (uint32_t s = 1; s < 2000; ++s) {
+            Minigame c;
+            c.start(vpet::MiniGame::Sequence, 0, s * 2654435761u);
+            for (int i = 1; i < Minigame::kSeqLen; ++i) repeats |= c.sequence(i) == c.sequence(i - 1);
+        }
+        check(!repeats, "sequence: never the same button twice in a row");
 
         // Training uses gentler settings than battles.
         vpet::MinigameTuning easy = vpet::MinigameTuning::training(), hard = vpet::MinigameTuning::battle();
@@ -557,7 +569,7 @@ int main(int argc, char* argv[]) {
               "training is easier: wider gold, slower cursor, fewer presses, more combo time");
         Minigame em;
         em.start(vpet::MiniGame::Mash, 0, 1, easy);
-        for (int i = 0; i < easy.mash_goal; ++i) em.press(vpet::BTN_A, 100 + i * 100, 0);
+        for (int i = 0; i < easy.mash_goal; ++i) em.press(i % 2 ? vpet::BTN_B : vpet::BTN_A, 100 + i * 100, 0);
         em.update(easy.mash_ms);
         check(em.success(), "training mash: hitting the lower goal succeeds");
 
@@ -593,9 +605,9 @@ int main(int argc, char* argv[]) {
     shot("06_status_p3");
     press(vpet::BTN_C);
 
-    std::printf("neglect for 40 minutes (catch-up)\n");
+    std::printf("neglect for 80 minutes (catch-up)\n");
     uint16_t mistakes_before = pet().care_mistakes;
-    skip(40 * 60 * 1000);
+    skip(80 * 60 * 1000);
     run(1000);
     check(pet().hunger == 0 && pet().strength == 0, "needs drained while away");
     check(pet().care_mistakes == mistakes_before + 2, "two ignored calls = two care mistakes");

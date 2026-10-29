@@ -32,9 +32,9 @@
       "family": "plant",
       "sprite": "sprites/blip.spr",
       "care": {
-        "hunger_minutes": 5,
-        "strength_minutes": 5,
-        "poop_minutes": 8,
+        "hunger_minutes": 10,
+        "strength_minutes": 10,
+        "poop_minutes": 16,
         "sleep": "21:00",
         "wake": "08:00",
         "weight": 5
@@ -57,7 +57,7 @@
       "stage": "child",
       "family": "machine",
       "sprite": "sprites/sprocket.spr",
-      "care": { "hunger_minutes": 5, "strength_minutes": 5, "poop_minutes": 8, "sleep": "21:00", "wake": "08:00", "weight": 8 },
+      "care": { "hunger_minutes": 10, "strength_minutes": 10, "poop_minutes": 16, "sleep": "21:00", "wake": "08:00", "weight": 8 },
       "stats": { "hp": 34, "atk": 9, "def": 8, "spd": 8 },
       "learns": [
         { "move": "tackle", "level": 1 },
@@ -75,7 +75,7 @@
       "stage": "child",
       "family": "beast",
       "sprite": "sprites/mudlump.spr",
-      "care": { "hunger_minutes": 5, "strength_minutes": 5, "poop_minutes": 8, "sleep": "21:00", "wake": "08:00", "weight": 8 },
+      "care": { "hunger_minutes": 10, "strength_minutes": 10, "poop_minutes": 16, "sleep": "21:00", "wake": "08:00", "weight": 8 },
       "stats": { "hp": 40, "atk": 8, "def": 9, "spd": 5 },
       "learns": [
         { "move": "tackle", "level": 1 },
@@ -93,7 +93,7 @@
       "stage": "adult",
       "family": "dark",
       "sprite": "sprites/voltwing.spr",
-      "care": { "hunger_minutes": 20, "strength_minutes": 20, "poop_minutes": 30, "sleep": "22:00", "wake": "08:00", "weight": 15 },
+      "care": { "hunger_minutes": 40, "strength_minutes": 40, "poop_minutes": 60, "sleep": "22:00", "wake": "08:00", "weight": 15 },
       "stats": { "hp": 60, "atk": 15, "def": 12, "spd": 13 },
       "learns": [
         { "move": "tackle", "level": 1 },

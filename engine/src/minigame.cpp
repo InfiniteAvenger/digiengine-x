@@ -12,7 +12,17 @@ void Minigame::start(MiniGame type, uint64_t now_ms, uint32_t seed, MinigameTuni
     tune_ = tuning;
     start_ = now_ms;
     zone_ = 6 + int(seed % uint32_t(100 - tune_.zone_width - 12));  // somewhere in the middle 6..88%
-    for (int i = 0; i < kSeqLen; ++i) seq_[i] = int((seed >> (8 + 2 * i)) % 3);
+    // Each step uses one of the two buttons that differ from the step before,
+    // so a combo never repeats a letter back to back.
+    uint32_t r = seed | 1;
+    auto next = [&r] {
+        r ^= r << 13;
+        r ^= r >> 17;
+        r ^= r << 5;
+        return r;
+    };
+    seq_[0] = int(next() % 3);
+    for (int i = 1; i < kSeqLen; ++i) seq_[i] = (seq_[i - 1] + 1 + int(next() % 2)) % 3;
 }
 
 void Minigame::finish(float m) {
@@ -34,7 +44,11 @@ void Minigame::press(Button b, uint64_t now_ms, uint32_t rnd) {
             break;
         }
         case MiniGame::Mash:
-            if (b != BTN_C) ++mash_;
+            // Only alternating A/B presses count; hammering one button does nothing.
+            if (b != BTN_C && b != last_mash_) {
+                ++mash_;
+                last_mash_ = b;
+            }
             break;
         case MiniGame::Sequence:
             if (b == Button(1 << seq_[seq_pos_])) {
@@ -95,7 +109,7 @@ void Minigame::draw(Framebuffer& fb, const Theme& t, int y, uint64_t now_ms) con
             break;
         }
         case MiniGame::Mash:
-            fb.draw_text_centered(y, (now_ms / 150) % 2 ? "MASH A + B!" : "MASH A + B !", t.accent);
+            fb.draw_text_centered(y, (now_ms / 150) % 2 ? "ALTERNATE A + B!" : "ALTERNATE A + B !", t.accent);
             draw_bar(fb, 10, y + 11, 100, 8, mash_, tune_.mash_goal, mash_ >= tune_.mash_goal ? t.accent : t.ui_text, dim);
             draw_bar(fb, 10, y + 23, 100, 2, int(tune_.mash_ms - std::min(elapsed, tune_.mash_ms)), int(tune_.mash_ms), t.ui_text, dim);
             break;
