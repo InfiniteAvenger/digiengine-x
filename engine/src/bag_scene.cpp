@@ -84,7 +84,7 @@ std::vector<int> owned(const Game& game, bool materials) {
     std::vector<int> ids;
     const Pack& pack = game.pack();
     for (size_t i = 0; i < pack.items.size(); ++i)
-        if (pack.items[i].material == materials && count(game.pet(), int(i)) > 0)
+        if (pack.items[i].material == materials && count(game.home(), int(i)) > 0)
             ids.push_back(int(i));
     return ids;
 }
@@ -94,7 +94,7 @@ std::unique_ptr<Scene> make_item_list(Game& g, bool materials) {
         std::vector<Row> out;
         for (int i : owned(g, materials)) {
             const ItemDef& it = g.pack().items[i];
-            out.push_back({it.name, "X" + std::to_string(count(g.pet(), i)), rarity_color(it.rarity), i});
+            out.push_back({it.name, "X" + std::to_string(count(g.home(), i)), rarity_color(it.rarity), i});
         }
         return out;
     };
@@ -111,7 +111,7 @@ std::unique_ptr<Scene> make_item_list(Game& g, bool materials) {
         std::string msg;
         int item = ids[row];
         const Effect& e = g.pack().items[item].effect;
-        if (use_item_at_home(g.pack(), g.pet(), item, msg) && (e.hunger || e.strength)) {
+        if (use_item_at_home(g.pack(), g.pet(), g.home(), item, msg) && (e.hunger || e.strength)) {
             g.pop();  // back to the home screen to watch it eat
             g.pop();
             g.play_eat(item);
@@ -129,7 +129,7 @@ std::unique_ptr<Scene> make_recipe_list(Game& g) {
         const Pack& pack = g.pack();
         for (size_t r = 0; r < pack.recipes.size(); ++r) {
             const ItemDef& it = pack.items[pack.recipes[r].makes];
-            bool ok = can_craft(pack, g.pet(), int(r));
+            bool ok = can_craft(pack, g.home(), int(r));
             out.push_back({it.name, ok ? "OK" : "-", ok ? rarity_color(it.rarity) : rgb(0x6a, 0x6e, 0x80),
                            pack.recipes[r].makes});
         }
@@ -139,12 +139,12 @@ std::unique_ptr<Scene> make_recipe_list(Game& g) {
         const Pack& pack = g.pack();
         std::string s = "NEEDS";
         for (auto [item, n] : pack.recipes[row].needs)
-            s += " " + pack.items[item].name + " " + std::to_string(count(g.pet(), item)) + "/" + std::to_string(n);
+            s += " " + pack.items[item].name + " " + std::to_string(count(g.home(), item)) + "/" + std::to_string(n);
         return s;
     };
     auto pick = [&g](int row) {
         const Pack& pack = g.pack();
-        if (craft(pack, g.pet(), row)) g.toast("MADE " + pack.items[pack.recipes[row].makes].name + "!");
+        if (craft(pack, g.home(), row)) g.toast("MADE " + pack.items[pack.recipes[row].makes].name + "!");
         else g.toast("MISSING ITEMS");
     };
     return std::make_unique<ListScene>(g, "COOK & CRAFT", rows, detail, pick, "NO RECIPES");

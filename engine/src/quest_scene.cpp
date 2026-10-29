@@ -110,7 +110,7 @@ private:
         items_.clear();
         const Pack& pack = game_.pack();
         for (size_t i = 0; i < pack.items.size(); ++i)
-            if (!pack.items[i].material && pack.items[i].effect.in_quest() && count(game_.pet(), int(i)) > 0)
+            if (!pack.items[i].material && pack.items[i].effect.in_quest() && count(game_.home(), int(i)) > 0)
                 items_.push_back(int(i));
         if (items_.empty()) return game_.toast("NO QUEST ITEMS");
         item_cursor_ = 0;
@@ -135,7 +135,7 @@ private:
             pet.run.def_buff += it.effect.def_buff;
             msgs.push_back("DEFENSE UP!");
         }
-        add_item(pet, item, -1);
+        add_item(game_.home(), item, -1);
         cursor_ = 0;
         resolve(-1, 0, msgs);  // using an item gives the enemy a free turn
     }
@@ -190,7 +190,7 @@ private:
         msgs.push_back("+" + std::to_string(xp) + " XP");
         gain_xp(pack, pet, xp, msgs);
         for (int item : roll_drops(e, floor, [this] { return game_.rand(); })) {
-            add_item(pet, item, 1);
+            add_item(game_.home(), item, 1);
             msgs.push_back("GOT " + pack.items[item].name + "!");
         }
         if (pet.run.atk_buff) --pet.run.atk_buff;
@@ -320,7 +320,7 @@ void QuestScene::draw(Framebuffer& fb) {
                 if (sel) fb.draw_text(2, y + int(i) * 9, ">", t.accent);
                 draw_item_icon(fb, pack, items_[idx], 7, y + int(i) * 9 - 2);
                 fb.draw_text(17, y + int(i) * 9, it.name, sel ? t.accent : t.ui_text);
-                std::string n = "X" + std::to_string(count(pet, items_[idx]));
+                std::string n = "X" + std::to_string(count(game_.home(), items_[idx]));
                 fb.draw_text(kScreenW - 6 - Framebuffer::text_width(n), y + int(i) * 9, n, t.ui_text);
             }
             fb.draw_text(6, kScreenH - 9, "B: USE  C: BACK", dim);

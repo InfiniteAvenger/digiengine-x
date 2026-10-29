@@ -1,4 +1,5 @@
 #include "vpet/game.h"
+#include <cctype>
 #include "scenes.h"
 
 namespace vpet {
@@ -15,8 +16,11 @@ bool Game::init(const std::string& pack_dir) {
     if (!load_pack(platform_, pack_dir, pack_, error_)) return false;
 
     std::string saved;
-    if (!(platform_.load_save(pack_.id, saved) && load_pet(pack_, saved, pet_)))
-        pet_ = new_pet(pack_, pack_.rosters[0].eggs[0], now_);
+    if (!(platform_.load_save(pack_.id, saved) && read_save(pack_, saved, save_))) {
+        save_ = Save{};
+        save_.home = new_home(pack_);
+        new_egg();
+    }
     last_save_ = now_;
 
     stack_.clear();
@@ -38,8 +42,14 @@ void Game::frame() {
 
     // The first frame after loading a save replays all the time it was closed.
     utc_offset_s_ = platform_.utc_offset_s();
-    uint32_t ev = simulate(pack_, pet_, now_, utc_offset_s_);
-    if (ev & EV_MISTAKE) toast("CARE MISTAKE!");
+    uint32_t ev = simulate(pack_, save_.active, now_, utc_offset_s_);
+    if (ev & EV_DIED) {
+        // Old age. Home, garden and cryo are kept; a new egg arrives.
+        std::string name = species().name;
+        for (char& c : name) c = char(toupper(static_cast<unsigned char>(c)));
+        new_egg();
+        toast(name + " PASSED ON");
+    } else if (ev & EV_MISTAKE) toast("CARE MISTAKE!");
     else if (ev & EV_HATCHED) toast("HATCHED!");
     else if (ev & EV_EVOLVED) toast("EVOLVED!");
     else if (ev & EV_SICK) toast("GOT SICK!");
@@ -84,8 +94,37 @@ void Game::frame() {
 
 void Game::save() {
     if (!error_.empty()) return;
-    platform_.write_save(pack_.id, save_pet(pack_, pet_));
+    platform_.write_save(pack_.id, write_save(pack_, save_));
     last_save_ = now_;
+}
+
+void Game::new_egg() {
+    const Roster& r = pack_.rosters[size_t(roster_) < pack_.rosters.size() ? roster_ : 0];
+    save_.active = new_pet(pack_, r.eggs[rand() % r.eggs.size()], now_);
+}
+
+bool Game::cryo_store(int slot, std::string& msg) {
+    if (save_.cryo[slot]) return msg = "SLOT IS FULL", false;
+    if (species().stage == Stage::Egg) return msg = "EGGS CAN'T BE FROZEN", false;
+    freeze(save_.active, now_);
+    save_.cryo[slot] = save_.active;
+    new_egg();
+    msg = "FROZEN. NEW EGG!";
+    save();
+    return true;
+}
+
+bool Game::cryo_swap(int slot, std::string& msg) {
+    if (!save_.cryo[slot]) return msg = "SLOT IS EMPTY", false;
+    if (species().stage == Stage::Egg) return msg = "EGGS CAN'T BE FROZEN", false;
+    Pet stored = *save_.cryo[slot];
+    freeze(save_.active, now_);
+    save_.cryo[slot] = save_.active;
+    thaw(stored, now_);
+    save_.active = stored;
+    msg = "SWAPPED!";
+    save();
+    return true;
 }
 
 void Game::push(std::unique_ptr<Scene> scene) { stack_.push_back(std::move(scene)); }

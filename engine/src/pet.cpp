@@ -115,9 +115,20 @@ Pet new_pet(const Pack& pack, int species, uint64_t now_ms) {
     p.species = species;
     p.born_ms = p.stage_ms = p.sim_ms = now_ms;
     p.weight = pack.species[species].care.weight;
-    p.inventory.assign(pack.items.size(), 0);
-    for (auto [item, count] : pack.start_items) p.inventory[item] = uint16_t(count);
     return p;
+}
+
+Home new_home(const Pack& pack) {
+    Home h;
+    h.inventory.assign(pack.items.size(), 0);
+    for (auto [item, count] : pack.start_items) h.inventory[item] = uint16_t(count);
+    return h;
+}
+
+std::optional<uint64_t> lifespan_left_ms(const Pack& pack, const Pet& pet, uint64_t now_ms) {
+    if (!pack.lifespan_s || pet.forever || pack.species[pet.species].stage == Stage::Egg) return std::nullopt;
+    uint64_t end = pet.born_ms + uint64_t(pack.lifespan_s) * 1000;
+    return end > now_ms ? end - now_ms : 0;
 }
 
 uint32_t simulate(const Pack& pack, Pet& pet, uint64_t now_ms, int32_t utc_offset_s) {
@@ -128,8 +139,25 @@ uint32_t simulate(const Pack& pack, Pet& pet, uint64_t now_ms, int32_t utc_offse
     while (pet.sim_ms + 1000 <= now_ms) {
         pet.sim_ms += 1000;
         ev |= tick(pack, pet, pet.sim_ms, utc_offset_s);
+        std::optional<uint64_t> left = lifespan_left_ms(pack, pet, pet.sim_ms);
+        if (left && *left == 0) {
+            ev |= EV_DIED;
+            break;
+        }
     }
     return ev;
+}
+
+void freeze(Pet& pet, uint64_t now_ms) { pet.frozen_ms = now_ms; }
+
+void thaw(Pet& pet, uint64_t now_ms) {
+    uint64_t dt = now_ms > pet.frozen_ms ? now_ms - pet.frozen_ms : 0;
+    pet.born_ms += dt;
+    pet.stage_ms += dt;
+    pet.sim_ms += dt;
+    for (Call* c : {&pet.hunger_call, &pet.strength_call, &pet.lights_call})
+        if (c->since_ms) c->since_ms += dt;
+    pet.frozen_ms = 0;
 }
 
 bool feed_kibble(Pet& pet) {
@@ -167,72 +195,60 @@ void finish_training(const Pack& pack, Pet& pet, bool success) {
     if (pet.weight > pack.species[pet.species].care.weight) --pet.weight;
 }
 
-std::string save_pet(const Pack& pack, const Pet& p) {
-    std::ostringstream o;
-    auto call = [&](const char* key, const Call& c) { o << key << ' ' << c.since_ms << ' ' << int(c.missed) << '\n'; };
-    o << "format 1\n"
-      << "species " << pack.species[p.species].id << '\n'
-      << "born " << p.born_ms << '\n'
-      << "stage_since " << p.stage_ms << '\n'
-      << "sim " << p.sim_ms << '\n'
-      << "hunger " << int(p.hunger) << '\n'
-      << "strength " << int(p.strength) << '\n'
-      << "poop " << int(p.poop) << '\n'
-      << "weight " << p.weight << '\n'
-      << "mistakes " << p.care_mistakes << '\n'
-      << "trainings " << p.trainings << '\n'
-      << "stage_mistakes " << p.stage_mistakes << '\n'
-      << "effort " << p.effort << '\n'
-      << "sick " << int(p.sick) << '\n'
-      << "asleep " << int(p.asleep) << '\n'
-      << "lights " << int(p.lights_on) << '\n'
-      << "timers " << p.hunger_s << ' ' << p.strength_s << ' ' << p.poop_s << '\n';
+
+namespace {
+
+using Fields = std::map<std::string, std::string>;
+
+void write_pet(std::ostringstream& o, const Pack& pack, const Pet& p, const std::string& prefix) {
+    auto key = [&](const char* k) -> std::ostringstream& { return static_cast<std::ostringstream&>(o << prefix << k << ' '); };
+    auto call = [&](const char* k, const Call& c) { key(k) << c.since_ms << ' ' << int(c.missed) << '\n'; };
+    key("species") << pack.species[p.species].id << '\n';
+    key("born") << p.born_ms << '\n';
+    key("stage_since") << p.stage_ms << '\n';
+    key("sim") << p.sim_ms << '\n';
+    key("hunger") << int(p.hunger) << '\n';
+    key("strength") << int(p.strength) << '\n';
+    key("poop") << int(p.poop) << '\n';
+    key("weight") << p.weight << '\n';
+    key("mistakes") << p.care_mistakes << '\n';
+    key("trainings") << p.trainings << '\n';
+    key("stage_mistakes") << p.stage_mistakes << '\n';
+    key("effort") << p.effort << '\n';
+    key("sick") << int(p.sick) << '\n';
+    key("asleep") << int(p.asleep) << '\n';
+    key("lights") << int(p.lights_on) << '\n';
+    key("forever") << int(p.forever) << '\n';
+    key("timers") << p.hunger_s << ' ' << p.strength_s << ' ' << p.poop_s << '\n';
     call("hunger_call", p.hunger_call);
     call("strength_call", p.strength_call);
     call("lights_call", p.lights_call);
-
-    o << "level " << p.level << '\n'
-      << "xp " << p.xp << '\n'
-      << "bonus " << p.bonus.hp << ' ' << p.bonus.atk << ' ' << p.bonus.def << ' ' << p.bonus.spd << '\n'
-      << "run " << p.run.floor << ' ' << p.run.best << ' ' << p.run.hp << ' ' << p.run.atk_buff << ' '
-      << p.run.def_buff << '\n';
-    o << "inventory";
-    for (size_t i = 0; i < p.inventory.size(); ++i)
-        if (p.inventory[i]) o << ' ' << pack.items[i].id << ':' << p.inventory[i];
-    o << "\ngarden";
-    for (const Plot& plot : p.garden) {
-        if (plot.crop < 0) o << " -";
-        else o << ' ' << pack.items[pack.crops[plot.crop].seed].id << ':' << plot.planted_ms;
-    }
-    o << '\n';
-    return o.str();
+    key("level") << p.level << '\n';
+    key("xp") << p.xp << '\n';
+    key("bonus") << p.bonus.hp << ' ' << p.bonus.atk << ' ' << p.bonus.def << ' ' << p.bonus.spd << '\n';
+    key("run") << p.run.floor << ' ' << p.run.best << ' ' << p.run.hp << ' ' << p.run.atk_buff << ' ' << p.run.def_buff
+               << '\n';
+    if (p.frozen_ms) key("frozen") << p.frozen_ms << '\n';
 }
 
-bool load_pet(const Pack& pack, const std::string& text, Pet& out) {
-    std::map<std::string, std::string> fields;
-    std::istringstream in(text);
-    std::string line;
-    while (std::getline(in, line)) {
-        size_t sp = line.find(' ');
-        if (sp != std::string::npos) fields[line.substr(0, sp)] = line.substr(sp + 1);
-    }
-    if (fields["format"] != "1") return false;
-
+bool read_pet(const Pack& pack, Fields& f, const std::string& prefix, Pet& out) {
+    auto get = [&](const char* k) -> std::string& { return f[prefix + k]; };
     Pet p;
-    p.species = pack.find_species(fields["species"]);
+    p.species = pack.find_species(get("species"));
     if (p.species < 0) return false;
 
-    auto num = [&](const char* key, auto& v) {
-        std::istringstream f(fields[key]);
+    auto num = [&](const char* k, auto& v) {
+        std::istringstream s(get(k));
         uint64_t x = 0;
-        f >> x;
-        v = decltype(+v)(x);
+        if (s >> x) v = decltype(+v)(x);
     };
-    auto flag = [&](const char* key, bool& v) { v = fields[key] == "1"; };
-    auto call = [&](const char* key, Call& c) {
-        std::istringstream f(fields[key]);
+    auto flag = [&](const char* k, bool& v) {
+        if (f.count(prefix + k)) v = get(k) == "1";
+    };
+    auto call = [&](const char* k, Call& c) {
+        std::istringstream s(get(k));
         int missed = 0;
-        f >> c.since_ms >> missed;
+        s >> c.since_ms >> missed;
         c.missed = missed != 0;
     };
 
@@ -250,30 +266,77 @@ bool load_pet(const Pack& pack, const std::string& text, Pet& out) {
     flag("sick", p.sick);
     flag("asleep", p.asleep);
     flag("lights", p.lights_on);
-    std::istringstream timers(fields["timers"]);
-    timers >> p.hunger_s >> p.strength_s >> p.poop_s;
+    flag("forever", p.forever);
+    std::istringstream(get("timers")) >> p.hunger_s >> p.strength_s >> p.poop_s;
     call("hunger_call", p.hunger_call);
     call("strength_call", p.strength_call);
     call("lights_call", p.lights_call);
-
-    if (fields.count("level")) num("level", p.level);
+    num("level", p.level);
     num("xp", p.xp);
-    std::istringstream(fields["bonus"]) >> p.bonus.hp >> p.bonus.atk >> p.bonus.def >> p.bonus.spd;
-    if (fields.count("run"))
-        std::istringstream(fields["run"]) >> p.run.floor >> p.run.best >> p.run.hp >> p.run.atk_buff >> p.run.def_buff;
+    std::istringstream(get("bonus")) >> p.bonus.hp >> p.bonus.atk >> p.bonus.def >> p.bonus.spd;
+    std::istringstream(get("run")) >> p.run.floor >> p.run.best >> p.run.hp >> p.run.atk_buff >> p.run.def_buff;
+    num("frozen", p.frozen_ms);
 
-    // "id:count" / "seed_id:planted_ms" tokens; ids the pack no longer has are dropped.
-    p.inventory.assign(pack.items.size(), 0);
-    if (!fields.count("inventory"))  // save from before items existed
-        for (auto [item, n] : pack.start_items) p.inventory[item] = uint16_t(n);
-    std::istringstream inv(fields["inventory"]);
+    if (p.hunger > kMaxHearts) p.hunger = kMaxHearts;
+    if (p.strength > kMaxHearts) p.strength = kMaxHearts;
+    if (p.poop > kMaxPoop) p.poop = kMaxPoop;
+    if (p.level < 1) p.level = 1;
+    out = p;
+    return true;
+}
+
+}  // namespace
+
+std::string write_save(const Pack& pack, const Save& s) {
+    std::ostringstream o;
+    o << "format 1\n";
+    write_pet(o, pack, s.active, "");
+    for (int i = 0; i < kCryoSlots; ++i)
+        if (s.cryo[i]) write_pet(o, pack, *s.cryo[i], "cryo" + std::to_string(i + 1) + ".");
+
+    // "id:count" and "seed_id:planted_ms" tokens.
+    o << "inventory";
+    for (size_t i = 0; i < s.home.inventory.size(); ++i)
+        if (s.home.inventory[i]) o << ' ' << pack.items[i].id << ':' << s.home.inventory[i];
+    o << "\ngarden";
+    for (const Plot& plot : s.home.garden) {
+        if (plot.crop < 0) o << " -";
+        else o << ' ' << pack.items[pack.crops[plot.crop].seed].id << ':' << plot.planted_ms;
+    }
+    o << '\n';
+    return o.str();
+}
+
+bool read_save(const Pack& pack, const std::string& text, Save& out) {
+    Fields f;
+    std::istringstream in(text);
+    for (std::string line; std::getline(in, line);) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        size_t sp = line.find(' ');
+        if (sp != std::string::npos) f[line.substr(0, sp)] = line.substr(sp + 1);
+    }
+    if (f["format"] != "1") return false;
+
+    Save s;
+    if (!read_pet(pack, f, "", s.active)) return false;
+    for (int i = 0; i < kCryoSlots; ++i) {
+        Pet p;
+        std::string prefix = "cryo" + std::to_string(i + 1) + ".";
+        if (f.count(prefix + "species") && read_pet(pack, f, prefix, p)) s.cryo[i] = p;
+    }
+
+    // Items and crops the pack no longer has are dropped.
+    s.home.inventory.assign(pack.items.size(), 0);
+    if (!f.count("inventory"))  // save from before items existed
+        for (auto [item, n] : pack.start_items) s.home.inventory[item] = uint16_t(n);
+    std::istringstream inv(f["inventory"]);
     for (std::string tok; inv >> tok;) {
         size_t colon = tok.find(':');
         int idx = pack.find_item(tok.substr(0, colon));
         if (idx >= 0 && colon != std::string::npos)
-            p.inventory[idx] = uint16_t(std::strtoul(tok.c_str() + colon + 1, nullptr, 10));
+            s.home.inventory[idx] = uint16_t(std::strtoul(tok.c_str() + colon + 1, nullptr, 10));
     }
-    std::istringstream garden(fields["garden"]);
+    std::istringstream garden(f["garden"]);
     std::string tok;
     for (int i = 0; i < kGardenPlots && garden >> tok; ++i) {
         size_t colon = tok.find(':');
@@ -281,15 +344,11 @@ bool load_pet(const Pack& pack, const std::string& text, Pet& out) {
         int seed = pack.find_item(tok.substr(0, colon));
         for (size_t c = 0; c < pack.crops.size(); ++c)
             if (pack.crops[c].seed == seed) {
-                p.garden[i].crop = int(c);
-                p.garden[i].planted_ms = std::strtoull(tok.c_str() + colon + 1, nullptr, 10);
+                s.home.garden[i].crop = int(c);
+                s.home.garden[i].planted_ms = std::strtoull(tok.c_str() + colon + 1, nullptr, 10);
             }
     }
-
-    if (p.hunger > kMaxHearts) p.hunger = kMaxHearts;
-    if (p.strength > kMaxHearts) p.strength = kMaxHearts;
-    if (p.poop > kMaxPoop) p.poop = kMaxPoop;
-    out = p;
+    out = std::move(s);
     return true;
 }
 

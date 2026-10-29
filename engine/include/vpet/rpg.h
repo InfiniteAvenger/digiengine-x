@@ -23,12 +23,12 @@ std::vector<int> equipped_moves(const Pack& pack, const Pet& pet);
 
 // --- Items --------------------------------------------------------------------
 
-int count(const Pet& pet, int item);
-void add_item(Pet& pet, int item, int n);
+int count(const Home& home, int item);
+void add_item(Home& home, int item, int n);
 // Uses an item from the bag at home. On failure `msg` says why.
-bool use_item_at_home(const Pack& pack, Pet& pet, int item, std::string& msg);
-bool can_craft(const Pack& pack, const Pet& pet, int recipe);
-bool craft(const Pack& pack, Pet& pet, int recipe);
+bool use_item_at_home(const Pack& pack, Pet& pet, Home& home, int item, std::string& msg);
+bool can_craft(const Pack& pack, const Home& home, int recipe);
+bool craft(const Pack& pack, Home& home, int recipe);
 
 // --- Garden -------------------------------------------------------------------
 
@@ -36,10 +36,10 @@ constexpr int kCropRipe = 3;
 // 0 planted, 1 sprout, 2 growing, 3 ripe.
 int crop_stage(const Pack& pack, const Plot& plot, uint64_t now_ms);
 uint64_t crop_ms_left(const Pack& pack, const Plot& plot, uint64_t now_ms);
-bool plant(const Pack& pack, Pet& pet, int plot, int crop, uint64_t now_ms);
+bool plant(const Pack& pack, Home& home, int plot, int crop, uint64_t now_ms);
 // Harvests a ripe plot. `roll` (0-99) decides the 50% chance of a seed back.
 // Returns the number of crops gained, 0 if not ripe.
-int harvest(const Pack& pack, Pet& pet, int plot, uint64_t now_ms, uint32_t roll);
+int harvest(const Pack& pack, Home& home, int plot, uint64_t now_ms, uint32_t roll);
 
 // --- Quest --------------------------------------------------------------------
 

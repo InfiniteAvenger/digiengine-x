@@ -245,3 +245,17 @@ drop lists. An enemy's own `drops` override its family's.
 ```
 
 Set a creature's or enemy's `"family"` to one of these names.
+
+## Lifespan and the Forever Partner
+
+```json
+"lifespan_days": 30
+```
+
+Creatures pass on of old age this many days after birth (0 or missing = never).
+Time spent in cryo storage doesn't count. When the active pet passes on, a new
+egg arrives; the bag, garden and cryo slots are kept.
+
+An item with `"effect": { "forever": true }` makes the pet a Forever Partner:
+it never passes on. The demo pack's FOREVER CHIP is crafted from 2 core
+shards, 2 glow roots and 2 power cells.

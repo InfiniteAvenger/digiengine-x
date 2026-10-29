@@ -26,7 +26,6 @@ public:
     void draw(Framebuffer& fb) override {
         const Theme& t = game_.pack().theme;
         const Pack& pack = game_.pack();
-        const Pet& pet = game_.pet();
         uint64_t now = game_.now();
 
         draw_title(fb, t, "GARDEN");
@@ -38,7 +37,7 @@ public:
             int x = kGridX + (i % kCols) * (kTile + 2), y = kGridY + (i / kCols) * (kTile + 4);
             fb.fill_rect(x, y, kTile, kTile, soil);
             for (int fy = y + 4; fy < y + kTile; fy += 5) fb.fill_rect(x + 2, fy, kTile - 4, 1, furrow);
-            const Plot& plot = pet.garden[i];
+            const Plot& plot = game_.home().garden[i];
             int stage = crop_stage(pack, plot, now);
             if (stage >= 0) fb.draw_sprite(pack.crops[plot.crop].sprite, stage, x + 1, y + 1, 2);
             if (stage == kCropRipe && (now / 400) % 2) fb.draw_text(x + kTile - 4, y + 1, "!", t.accent);
@@ -53,7 +52,7 @@ public:
             const Crop& c = pack.crops[seeds_[pick_]];
             fb.draw_text(6, kPanelY + 4, "PLANT WHICH SEED?", t.accent);
             draw_item_icon(fb, pack, c.seed, 5, kPanelY + 11);
-            fb.draw_text(15, kPanelY + 13, pack.items[c.seed].name + " X" + std::to_string(count(pet, c.seed)),
+            fb.draw_text(15, kPanelY + 13, pack.items[c.seed].name + " X" + std::to_string(count(game_.home(), c.seed)),
                          t.ui_text);
             fb.draw_text(6, kPanelY + 21, "GROWS " + pack.items[c.yields].name + " IN " +
                                               format_duration(uint64_t(c.grow_s) * 1000),
@@ -62,7 +61,7 @@ public:
             return;
         }
 
-        const Plot& plot = pet.garden[cursor_];
+        const Plot& plot = game_.home().garden[cursor_];
         int stage = crop_stage(pack, plot, now);
         if (stage < 0) {
             fb.draw_text(6, kPanelY + 4, "EMPTY PLOT", t.accent);
@@ -88,14 +87,13 @@ private:
         std::vector<int> crops;
         const Pack& pack = game_.pack();
         for (size_t c = 0; c < pack.crops.size(); ++c)
-            if (count(game_.pet(), pack.crops[c].seed) > 0) crops.push_back(int(c));
+            if (count(game_.home(), pack.crops[c].seed) > 0) crops.push_back(int(c));
         return crops;
     }
 
     void act() {
         const Pack& pack = game_.pack();
-        Pet& pet = game_.pet();
-        const Plot& plot = pet.garden[cursor_];
+        const Plot& plot = game_.home().garden[cursor_];
         if (plot.crop < 0) {
             seeds_ = available_seeds();
             if (seeds_.empty()) return game_.toast("NO SEEDS");
@@ -104,7 +102,7 @@ private:
             return;
         }
         std::string name = pack.items[pack.crops[plot.crop].yields].name;
-        int got = harvest(pack, pet, cursor_, game_.now(), game_.rand());
+        int got = harvest(pack, game_.home(), cursor_, game_.now(), game_.rand());
         game_.toast(got ? "+" + std::to_string(got) + " " + name : "NOT RIPE YET");
     }
 
@@ -112,7 +110,7 @@ private:
         if (b == BTN_A) {
             pick_ = (pick_ + 1) % int(seeds_.size());
         } else if (b == BTN_B) {
-            if (plant(game_.pack(), game_.pet(), cursor_, seeds_[pick_], game_.now())) game_.toast("PLANTED!");
+            if (plant(game_.pack(), game_.home(), cursor_, seeds_[pick_], game_.now())) game_.toast("PLANTED!");
             picking_ = false;
         } else {
             picking_ = false;

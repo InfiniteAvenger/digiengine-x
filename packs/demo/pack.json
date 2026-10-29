@@ -195,6 +195,7 @@
     { "icon": 28, "id": "def_chip",    "name": "DEF CHIP",    "rarity": "rare",     "info": "PERMANENT +2 DEFENSE.", "effect": { "def": 2 } },
     { "icon": 29, "id": "spd_chip",    "name": "SPD CHIP",    "rarity": "rare",     "info": "PERMANENT +2 SPEED.", "effect": { "spd": 2 } },
     { "icon": 30, "id": "core_chip",   "name": "CORE CHIP",   "rarity": "epic",     "info": "PERMANENT +5 HP, +2 TO ALL.", "effect": { "hp": 5, "atk": 2, "def": 2, "spd": 2 } },
+    { "icon": 32, "id": "forever_chip", "name": "FOREVER CHIP", "rarity": "epic", "info": "YOUR PARTNER STOPS AGING. FOREVER.", "effect": { "forever": true } },
     { "icon": 31, "id": "debug_kit",   "name": "DEBUG KIT",   "rarity": "epic",     "info": "FULL HEAL AND +ATTACK. QUEST.", "effect": { "heal": 100, "atk_buff": 3, "def_buff": 3 } }
   ],
 
@@ -214,7 +215,8 @@
     { "makes": "def_chip",    "needs": { "scrap": 3, "power_cell": 1 } },
     { "makes": "spd_chip",    "needs": { "wire": 3, "power_cell": 1 } },
     { "makes": "core_chip",   "needs": { "core_shard": 1, "circuit": 2, "power_cell": 1 } },
-    { "makes": "debug_kit",   "needs": { "core_shard": 1, "glow_root": 1 } }
+    { "makes": "debug_kit",   "needs": { "core_shard": 1, "glow_root": 1 } },
+    { "makes": "forever_chip", "needs": { "core_shard": 2, "glow_root": 2, "power_cell": 2 } }
   ],
 
   "crops": [
@@ -224,6 +226,8 @@
   ],
 
   "item_icons": "sprites/items.spr",
+
+  "lifespan_days": 30,
 
   "start_items": { "data_seed": 3, "herb_seed": 1, "patch": 2 }
 }

@@ -48,9 +48,20 @@ public:
     uint64_t eat_start() const { return eat_start_; }
 
     const Pack& pack() const { return pack_; }
-    Pet& pet() { return pet_; }
-    const Pet& pet() const { return pet_; }
-    const Species& species() const { return pack_.species[pet_.species]; }
+    Pet& pet() { return save_.active; }
+    const Pet& pet() const { return save_.active; }
+    Home& home() { return save_.home; }
+    const Home& home() const { return save_.home; }
+    const Species& species() const { return pack_.species[save_.active.species]; }
+
+    // Cryo storage. Storing puts the active pet in an empty slot and starts a
+    // new egg; swapping trades the active pet with a stored one. Both return
+    // false (with a reason in `msg`) when not allowed.
+    const std::optional<Pet>& cryo(int slot) const { return save_.cryo[slot]; }
+    bool cryo_store(int slot, std::string& msg);
+    bool cryo_swap(int slot, std::string& msg);
+    // Replaces the active pet with a fresh egg from the current roster.
+    void new_egg();
     uint64_t now() const { return now_; }
     // Minutes after local midnight (0-1439).
     int local_minute() const {
@@ -65,7 +76,8 @@ private:
     Platform& platform_;
     Framebuffer fb_;
     Pack pack_;
-    Pet pet_;
+    Save save_;
+    int roster_ = 0;
     std::vector<std::unique_ptr<Scene>> stack_;
     int pending_pops_ = 0;
     std::string error_;

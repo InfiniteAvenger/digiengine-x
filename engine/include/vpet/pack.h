@@ -58,11 +58,12 @@ const char* rarity_name(Rarity r);
 struct Effect {
     int hunger = 0, strength = 0;  // hearts
     bool cure = false;             // cures sickness
+    bool forever = false;          // Forever Partner: the pet stops aging
     Stats bonus;                   // permanent stat increase (chips)
     int heal = 0;                  // quest: percent of max HP restored
     int atk_buff = 0, def_buff = 0;  // quest: floors of +25% ATK / DEF
 
-    bool at_home() const { return hunger || strength || cure || bonus.hp || bonus.atk || bonus.def || bonus.spd; }
+    bool at_home() const { return hunger || strength || cure || forever || bonus.hp || bonus.atk || bonus.def || bonus.spd; }
     bool in_quest() const { return heal || atk_buff || def_buff; }
 };
 
@@ -167,6 +168,7 @@ struct Pack {
     std::vector<std::pair<std::string, std::vector<Drop>>> family_drops;
     std::vector<EnemyTier> tiers;
     std::vector<std::pair<int, int>> start_items;  // given with a new egg
+    uint32_t lifespan_s = 0;                       // old age, from birth; 0 = none
 
     int find_species(const std::string& id) const;
     int find_item(const std::string& id) const;

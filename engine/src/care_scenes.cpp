@@ -112,7 +112,10 @@ public:
                 for (const EvolveRule& r : s.evolve) due = std::min(due, pet.stage_ms + uint64_t(r.after_seconds) * 1000);
                 row(63, "NEXT FORM", due > now ? format_duration(due - now) : "NEEDS MORE");
             }
-            fb.draw_sprite(s.sprite, 0, (kScreenW - s.sprite.w * 2) / 2, 74, 2);
+            std::optional<uint64_t> life = lifespan_left_ms(game_.pack(), pet, now);
+            if (pet.forever) row(72, "LIFESPAN", "FOREVER");
+            else if (life) row(72, "LIFESPAN", format_duration(*life) + " LEFT");
+            fb.draw_sprite(s.sprite, 0, kScreenW - 4 - s.sprite.w * 2, 14, 2);
         } else if (page_ == 1) {
             fb.draw_text(kLabelX, 19, "HUNGER", t.accent);
             draw_hearts(fb, kValueX, 18, pet.hunger);

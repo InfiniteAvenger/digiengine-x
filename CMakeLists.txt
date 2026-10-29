@@ -9,6 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_library(vpet_engine STATIC
     engine/src/bag_scene.cpp
     engine/src/care_scenes.cpp
+    engine/src/cryo_scene.cpp
     engine/src/font.cpp
     engine/src/framebuffer.cpp
     engine/src/game.cpp

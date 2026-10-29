@@ -9,10 +9,11 @@ struct MenuItem {
 };
 
 // Order matches the frames of icons().menu.
-enum MenuId { M_STATUS, M_FEED, M_TRAIN, M_QUEST, M_CLEAN, M_LIGHTS, M_GARDEN, M_BAG, kMenuCount };
+enum MenuId { M_STATUS, M_FEED, M_TRAIN, M_QUEST, M_CLEAN, M_LIGHTS, M_GARDEN, M_BAG, M_CRYO, kMenuCount };
+constexpr int kSlotW = 13;
 
 constexpr MenuItem kMenu[kMenuCount] = {
-    {"STATUS"}, {"FEED"}, {"TRAIN"}, {"QUEST"}, {"CLEAN"}, {"LIGHTS"}, {"GARDEN"}, {"BAG"},
+    {"STATUS"}, {"FEED"}, {"TRAIN"}, {"QUEST"}, {"CLEAN"}, {"LIGHTS"}, {"GARDEN"}, {"BAG"}, {"CRYO STORAGE"},
 };
 
 // Screen layout (120x120)
@@ -117,7 +118,7 @@ public:
 
         fb.fill_rect(0, 0, kScreenW, kTopBarH, t.ui);
         for (int i = 0; i < kMenuCount; ++i) {
-            int x = i * 15 + 1;
+            int x = i * kSlotW + 2;  // 9 slots of 13px fill the 120px bar
             bool sel = i == selected_;
             if (sel) fb.fill_rect(x, 0, 13, kTopBarH, t.accent);
             int bob = sel && (now / 300) % 2 ? 1 : 0;  // the chosen icon bobs
@@ -181,6 +182,7 @@ private:
                 break;
             case M_GARDEN: game_.push(make_garden_scene(game_)); break;
             case M_BAG: game_.push(make_bag_scene(game_)); break;
+            case M_CRYO: game_.push(make_cryo_scene(game_)); break;
             default: break;
         }
     }

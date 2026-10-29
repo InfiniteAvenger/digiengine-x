@@ -69,6 +69,7 @@ void read_effect(const Json& j, Effect& e) {
     e.heal = j["heal"].int_or(0);
     e.atk_buff = j["atk_buff"].int_or(0);
     e.def_buff = j["def_buff"].int_or(0);
+    e.forever = j["forever"].bool_or(false);
 }
 
 // Loads a .spr text sprite or a .png sheet. For PNGs, `owner` may give
@@ -459,6 +460,7 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
     }
 
     if (!amounts(root["start_items"], "start_items", out.start_items)) return false;
+    out.lifespan_s = uint32_t(root["lifespan_days"].num_or(0) * 86400.0);
 
     if (out.rosters.empty() || out.rosters[0].eggs.empty()) {
         err = "pack needs at least one roster with an egg";

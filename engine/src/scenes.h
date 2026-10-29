@@ -1,4 +1,5 @@
 #pragma once
+#include <cctype>
 #include <memory>
 #include <string>
 #include <vector>
@@ -13,6 +14,7 @@ std::unique_ptr<Scene> make_train_scene(Game& game);
 std::unique_ptr<Scene> make_garden_scene(Game& game);
 std::unique_ptr<Scene> make_bag_scene(Game& game);
 std::unique_ptr<Scene> make_quest_scene(Game& game);
+std::unique_ptr<Scene> make_cryo_scene(Game& game);
 
 // Shared drawing helpers for full-screen menus.
 std::string format_duration(uint64_t ms);

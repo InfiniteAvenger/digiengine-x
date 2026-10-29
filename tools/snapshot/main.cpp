@@ -263,9 +263,85 @@ void enemy_checks(FakePlatform& p, const std::string& demo_dir) {
           "enemies scale from the start of their tier; bosses get +50% HP");
 }
 
+// Cryo storage, lifespan and the Forever Chip, through the real Game object.
+void cryo_checks(const FakePlatform& base, const std::string& demo_dir) {
+    std::printf("cryo storage, lifespan, forever partner\n");
+    FakePlatform q;
+    q.clock = base.clock;
+    q.offset = base.offset;
+    auto g = std::make_unique<vpet::Game>(q);
+    g->init(demo_dir);
+    auto advance = [&](uint64_t ms) {
+        q.clock += ms;
+        g->frame();
+    };
+    vpet::Pack pack;  // own copy: g is replaced when the save is reloaded below
+    std::string load_err;
+    vpet::load_pack(q, demo_dir, pack, load_err);
+    const uint64_t day = 24ull * 3600 * 1000;
+    int blip = pack.find_species("blip");
+    std::string msg;
+
+    advance(31'000);  // hatch
+    vpet::Pet before = g->pet();
+    check(before.species == blip, "cryo setup: the egg hatched");
+    check(g->cryo_store(0, msg) && g->cryo(0) && g->cryo(0)->species == blip &&
+              pack.species[g->pet().species].stage == vpet::Stage::Egg,
+          "storing freezes the active pet and a new egg arrives");
+    check(!g->cryo_store(1, msg), "an egg can't be frozen");
+
+    advance(3 * day);  // the new egg hatches and grows; the frozen pet must not
+    uint64_t frozen_for = q.clock - g->cryo(0)->frozen_ms;
+    check(g->cryo_swap(0, msg), "swapping a stored pet back in");
+    const vpet::Pet& back = g->pet();
+    check(back.species == blip && back.hunger == before.hunger && back.poop == before.poop &&
+              back.care_mistakes == before.care_mistakes,
+          "a frozen pet doesn't evolve, get hungry, poop or make mistakes");
+    check(back.born_ms == before.born_ms + frozen_for && back.stage_ms == before.stage_ms + frozen_for,
+          "age and form timers resume where they paused");
+    check(g->cryo(0) && g->cryo(0)->frozen_ms == q.clock, "the other pet is now the one frozen");
+
+    vpet::Pet stored = *g->cryo(0);
+    g->save();
+    g = std::make_unique<vpet::Game>(q);
+    g->init(demo_dir);
+    check(g->cryo(0) && g->cryo(0)->species == stored.species && g->cryo(0)->frozen_ms == stored.frozen_ms &&
+              g->pet().species == blip && !g->cryo(1),
+          "cryo slots survive a save and reload");
+
+    // Lifespan: the demo pack's creatures live 30 days.
+    vpet::Pet old = vpet::new_pet(pack, blip, q.clock);
+    old.born_ms = q.clock - 30 * day + 5'000;
+    uint32_t ev = vpet::simulate(pack, old, q.clock + 10'000, q.offset);
+    check(ev & vpet::EV_DIED, "a pet reaching its lifespan passes on");
+    vpet::Pet immortal = vpet::new_pet(pack, blip, q.clock);
+    immortal.born_ms = q.clock - 300 * day;
+    immortal.forever = true;
+    check(!(vpet::simulate(pack, immortal, q.clock + 10'000, q.offset) & vpet::EV_DIED) &&
+              !vpet::lifespan_left_ms(pack, immortal, q.clock),
+          "a Forever Partner never passes on");
+
+    int chip = pack.find_item("forever_chip");
+    vpet::add_item(g->home(), chip, 1);
+    g->pet().asleep = false;
+    bool used = vpet::use_item_at_home(pack, g->pet(), g->home(), chip, msg);
+    check(used && g->pet().forever && vpet::count(g->home(), chip) == 0, "the Forever Chip makes the pet a Forever Partner");
+    vpet::add_item(g->home(), chip, 1);
+    check(!vpet::use_item_at_home(pack, g->pet(), g->home(), chip, msg), "a second chip is refused");
+
+    // In the game: the active pet passes on, home is kept, a new egg arrives.
+    g->pet().forever = false;
+    std::vector<uint16_t> inv = g->home().inventory;
+    g->pet().born_ms = q.clock - 30 * day + 1'000;
+    advance(3'000);
+    check(pack.species[g->pet().species].stage == vpet::Stage::Egg && g->home().inventory == inv && g->cryo(0),
+          "after passing on: a new egg, and the bag and cryo slots are kept");
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
+    std::setvbuf(stdout, nullptr, _IONBF, 0);  // keep output if a check crashes
     if (argc < 3) {
         std::fprintf(stderr, "usage: vpet_snapshot <pack_dir> <out_dir>\n");
         return 2;
@@ -274,6 +350,7 @@ int main(int argc, char* argv[]) {
     pack_tool_checks(p, argv[1]);
     evolution_checks(p, argv[1]);
     enemy_checks(p, argv[1]);
+    cryo_checks(p, argv[1]);
     auto game = std::make_unique<vpet::Game>(p);
     if (!game->init(argv[1])) return 1;
     std::string out = argv[2];
@@ -470,17 +547,17 @@ int main(int argc, char* argv[]) {
     int data_seed = pk.find_item("data_seed"), berry = pk.find_item("berry"), jam = pk.find_item("berry_jam");
 
     std::printf("garden\n");
-    check(vpet::count(pet(), data_seed) == 3, "a new pet starts with 3 data seeds");
+    check(vpet::count(game->home(), data_seed) == 3, "a new pet starts with 3 data seeds");
     select(6);
     press(vpet::BTN_B);  // open garden, cursor on plot 0
     press(vpet::BTN_B);  // empty plot -> seed picker
     press(vpet::BTN_B);  // plant the first seed type
-    check(pet().garden[0].crop == 0 && vpet::count(pet(), data_seed) == 2, "planting uses a seed");
+    check(game->home().garden[0].crop == 0 && vpet::count(game->home(), data_seed) == 2, "planting uses a seed");
     press(vpet::BTN_A);
     press(vpet::BTN_B);
     press(vpet::BTN_A);  // second seed type: herb
     press(vpet::BTN_B);
-    check(pet().garden[1].crop == 1, "planted an herb in plot 2");
+    check(game->home().garden[1].crop == 1, "planted an herb in plot 2");
     run(500);
     shot("11_garden_planted");
     skip(21 * 60 * 1000);
@@ -488,8 +565,8 @@ int main(int argc, char* argv[]) {
     shot("12_garden_ripe");
     for (int i = 0; i < 7; ++i) press(vpet::BTN_A);  // back to plot 0
     press(vpet::BTN_B);
-    check(vpet::count(pet(), berry) == 3 && pet().garden[0].crop < 0, "harvest gives 3 berries and clears the plot");
-    check(pet().garden[1].crop == 1, "the herb is still growing");
+    check(vpet::count(game->home(), berry) == 3 && game->home().garden[0].crop < 0, "harvest gives 3 berries and clears the plot");
+    check(game->home().garden[1].crop == 1, "the herb is still growing");
     press(vpet::BTN_C);
 
     std::printf("cooking\n");
@@ -500,14 +577,14 @@ int main(int argc, char* argv[]) {
     press(vpet::BTN_B);  // cook & craft
     shot("13_recipes");
     press(vpet::BTN_B);  // first recipe: berry jam
-    check(vpet::count(pet(), jam) == 1 && vpet::count(pet(), berry) == 0, "3 berries cook into berry jam");
+    check(vpet::count(game->home(), jam) == 1 && vpet::count(game->home(), berry) == 0, "3 berries cook into berry jam");
     press(vpet::BTN_C);
     press(vpet::BTN_A);  // wrap around to ITEMS
     press(vpet::BTN_B);
     shot("14_items");
     int hunger_before = pet().hunger;
     press(vpet::BTN_B);  // eat the jam
-    check(vpet::count(pet(), jam) == 0 && pet().hunger == std::min(4, hunger_before + 2), "berry jam adds 2 hunger");
+    check(vpet::count(game->home(), jam) == 0 && pet().hunger == std::min(4, hunger_before + 2), "berry jam adds 2 hunger");
     press(vpet::BTN_C);
     press(vpet::BTN_C);
 
@@ -563,20 +640,30 @@ int main(int argc, char* argv[]) {
     check(pet().run.best == 0 || pet().level > start_level || int(pet().xp) > start_xp, "clearing floors gives XP");
     int loot = 0;
     for (size_t i = 0; i < pk.items.size(); ++i)
-        if (pk.items[i].material) loot += vpet::count(pet(), int(i));
+        if (pk.items[i].material) loot += vpet::count(game->home(), int(i));
     std::printf("  materials owned: %d\n", loot);
 
     std::printf("save round-trip of RPG state\n");
     vpet::Pet mid = pet();
+    vpet::Home mid_home = game->home();
     game->save();
     game = std::make_unique<vpet::Game>(p);
     game->init(argv[1]);
     check(pet().level == mid.level && pet().xp == mid.xp && pet().run.best == mid.run.best &&
-              pet().inventory == mid.inventory && pet().garden[1].crop == mid.garden[1].crop &&
-              pet().garden[1].planted_ms == mid.garden[1].planted_ms,
+              game->home().inventory == mid_home.inventory && game->home().garden[1].crop == mid_home.garden[1].crop &&
+              game->home().garden[1].planted_ms == mid_home.garden[1].planted_ms,
           "level, run, inventory and garden survive a reload");
     run(500);
     shot("21_home_day");
+    select(8);
+    run(400);
+    shot("23_menu_cryo_selected");
+    press(vpet::BTN_B);
+    shot("24_cryo_screen");
+    press(vpet::BTN_B);
+    shot("25_cryo_confirm");
+    press(vpet::BTN_C);
+    press(vpet::BTN_C);
 
     // The timing bar on its own, mid-sweep, to check the gold zone art.
     {

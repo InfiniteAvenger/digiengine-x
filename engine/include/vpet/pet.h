@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <vector>
 #include "vpet/pack.h"
 
 namespace vpet {
@@ -8,6 +10,7 @@ namespace vpet {
 constexpr int kMaxHearts = 4;
 constexpr int kMaxPoop = 4;
 constexpr uint32_t kCallTimeoutS = 10 * 60;  // an ignored call becomes a care mistake
+constexpr int kCryoSlots = 2;
 
 // A need the player must answer (empty hunger, empty strength, lights left on
 // at bedtime). Each call costs at most one care mistake.
@@ -49,6 +52,7 @@ struct Pet {
     bool sick = false;
     bool asleep = false;
     bool lights_on = true;
+    bool forever = false;  // Forever Partner: never dies of old age
 
     // Awake seconds since the last hunger/strength drop and the last poop.
     uint32_t hunger_s = 0, strength_s = 0, poop_s = 0;
@@ -61,11 +65,22 @@ struct Pet {
     Stats bonus;  // permanent, from chips
     Run run;
 
-    // Home (will move out of Pet when cold storage holds several pets)
-    std::vector<uint16_t> inventory;  // count per pack.items index
-    Plot garden[kGardenPlots];
+    uint64_t frozen_ms = 0;  // when it went into cryo (only while stored)
 
     bool needs_attention() const { return hunger_call.active() || strength_call.active() || lights_call.active(); }
+};
+
+// Shared by every pet: the bag and the garden.
+struct Home {
+    std::vector<uint16_t> inventory;  // count per pack.items index
+    Plot garden[kGardenPlots];
+};
+
+// Everything in one save slot.
+struct Save {
+    Pet active;
+    Home home;
+    std::optional<Pet> cryo[kCryoSlots];
 };
 
 enum SimEvent : uint32_t {
@@ -76,17 +91,29 @@ enum SimEvent : uint32_t {
     EV_POOPED = 1 << 4,
     EV_SICK = 1 << 5,
     EV_MISTAKE = 1 << 6,
+    EV_DIED = 1 << 7,  // reached the pack's lifespan
 };
 
 Pet new_pet(const Pack& pack, int species, uint64_t now_ms);
+Home new_home(const Pack& pack);  // with the pack's start_items
 
 // True if every condition of `rule` holds right now (time included).
 bool evolution_ready(const EvolveRule& rule, const Pet& pet, uint64_t now_ms);
 
+// Remaining lifespan, or nullopt if the pet can't die of old age (no lifespan
+// in the pack, still an egg, or a Forever Partner).
+std::optional<uint64_t> lifespan_left_ms(const Pack& pack, const Pet& pet, uint64_t now_ms);
+
 // Advances the pet to now_ms in one-second steps, so a game that was closed
 // for hours catches up exactly as if it had been running (capped at 30 days).
-// Returns a mask of SimEvents that happened.
+// Returns a mask of SimEvents that happened. Stops at EV_DIED.
 uint32_t simulate(const Pack& pack, Pet& pet, uint64_t now_ms, int32_t utc_offset_s);
+
+// Cryo: freezing records the time; thawing shifts every timestamp forward by
+// the time spent frozen, so age, needs, calls and evolution all resume
+// exactly where they paused.
+void freeze(Pet& pet, uint64_t now_ms);
+void thaw(Pet& pet, uint64_t now_ms);
 
 // Care actions. Each returns false when it has no effect (full, not sick...).
 bool feed_kibble(Pet& pet);
@@ -95,9 +122,9 @@ bool clean_up(Pet& pet);
 void toggle_lights(Pet& pet);
 void finish_training(const Pack& pack, Pet& pet, bool success);
 
-// Plain "key value" text, one field per line. Species are stored by id so
-// saves survive pack edits; an unknown id makes load_pet fail.
-std::string save_pet(const Pack& pack, const Pet& pet);
-bool load_pet(const Pack& pack, const std::string& text, Pet& out);
+// Plain "key value" text, one field per line. Species and items are stored by
+// id so saves survive pack edits. Fails if the active pet's species is gone.
+std::string write_save(const Pack& pack, const Save& save);
+bool read_save(const Pack& pack, const std::string& text, Save& out);
 
 }  // namespace vpet

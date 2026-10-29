@@ -78,7 +78,7 @@ Sprite load(const char* text) {
 }
 
 // Home menu, one 9x9 frame per slot, drawn as a one-color mask:
-// status, feed, train, quest, clean, lights, garden, bag.
+// status, feed, train, quest, clean, lights, garden, bag, cryo.
 constexpr const char* kMenu = R"(size 9 9
 palette
 x ffffff
@@ -162,6 +162,16 @@ xx.xxx.xx
 xx.....xx
 xxxxxxxxx
 .xxxxxxx.
+frame
+....x....
+.x..x..x.
+..x.x.x..
+...xxx...
+xxxxxxxxx
+...xxx...
+..x.x.x..
+.x..x..x.
+....x....
 )";
 
 constexpr const char* kKibble = R"(size 8 8

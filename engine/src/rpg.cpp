@@ -39,50 +39,53 @@ std::vector<int> equipped_moves(const Pack& pack, const Pet& pet) {
 
 // --- Items --------------------------------------------------------------------
 
-int count(const Pet& pet, int item) { return item >= 0 && size_t(item) < pet.inventory.size() ? pet.inventory[item] : 0; }
-
-void add_item(Pet& pet, int item, int n) {
-    int v = std::clamp(count(pet, item) + n, 0, 999);
-    pet.inventory[item] = uint16_t(v);
+int count(const Home& home, int item) {
+    return item >= 0 && size_t(item) < home.inventory.size() ? home.inventory[item] : 0;
 }
 
-bool use_item_at_home(const Pack& pack, Pet& pet, int item, std::string& msg) {
+void add_item(Home& home, int item, int n) {
+    if (item < 0 || size_t(item) >= home.inventory.size()) return;
+    home.inventory[item] = uint16_t(std::clamp(count(home, item) + n, 0, 999));
+}
+
+bool use_item_at_home(const Pack& pack, Pet& pet, Home& home, int item, std::string& msg) {
     const ItemDef& it = pack.items[item];
     const Effect& e = it.effect;
-    if (count(pet, item) <= 0) return msg = "NONE LEFT", false;
+    if (count(home, item) <= 0) return msg = "NONE LEFT", false;
     if (it.material || !e.at_home()) return msg = it.material ? "INGREDIENT" : "USE IN QUESTS", false;
     if (pack.species[pet.species].stage == Stage::Egg) return msg = "STILL AN EGG", false;
     if (pet.asleep) return msg = "ZZZ...", false;
-    bool full = e.hunger && pet.hunger >= kMaxHearts && !e.strength && !e.cure && !e.bonus.hp && !e.bonus.atk &&
-                !e.bonus.def && !e.bonus.spd;
-    if (full) return msg = "FULL!", false;
+    if (e.forever && pet.forever) return msg = "ALREADY FOREVER", false;
+    bool only_food = !e.strength && !e.cure && !e.forever && !e.bonus.hp && !e.bonus.atk && !e.bonus.def && !e.bonus.spd;
+    if (e.hunger && pet.hunger >= kMaxHearts && only_food) return msg = "FULL!", false;
 
     pet.hunger = uint8_t(std::min(kMaxHearts, pet.hunger + e.hunger));
     pet.strength = uint8_t(std::min(kMaxHearts, pet.strength + e.strength));
     if (e.hunger) pet.hunger_call = Call{};
     if (e.strength) pet.strength_call = Call{};
     if (e.cure) pet.sick = false;
+    if (e.forever) pet.forever = true;
     pet.bonus.hp += e.bonus.hp;
     pet.bonus.atk += e.bonus.atk;
     pet.bonus.def += e.bonus.def;
     pet.bonus.spd += e.bonus.spd;
     pet.weight = uint16_t(pet.weight + e.hunger);
-    add_item(pet, item, -1);
-    msg = e.hunger ? "YUM!" : "USED " + it.name;
+    add_item(home, item, -1);
+    msg = e.forever ? "PARTNERS FOREVER!" : e.hunger ? "YUM!" : "USED " + it.name;
     return true;
 }
 
-bool can_craft(const Pack& pack, const Pet& pet, int recipe) {
+bool can_craft(const Pack& pack, const Home& home, int recipe) {
     for (auto [item, n] : pack.recipes[recipe].needs)
-        if (count(pet, item) < n) return false;
+        if (count(home, item) < n) return false;
     return true;
 }
 
-bool craft(const Pack& pack, Pet& pet, int recipe) {
-    if (!can_craft(pack, pet, recipe)) return false;
+bool craft(const Pack& pack, Home& home, int recipe) {
+    if (!can_craft(pack, home, recipe)) return false;
     const Recipe& r = pack.recipes[recipe];
-    for (auto [item, n] : r.needs) add_item(pet, item, -n);
-    add_item(pet, r.makes, r.count);
+    for (auto [item, n] : r.needs) add_item(home, item, -n);
+    add_item(home, r.makes, r.count);
     return true;
 }
 
@@ -102,19 +105,19 @@ uint64_t crop_ms_left(const Pack& pack, const Plot& plot, uint64_t now_ms) {
     return done > now_ms ? done - now_ms : 0;
 }
 
-bool plant(const Pack& pack, Pet& pet, int plot, int crop, uint64_t now_ms) {
-    if (pet.garden[plot].crop >= 0 || count(pet, pack.crops[crop].seed) <= 0) return false;
-    add_item(pet, pack.crops[crop].seed, -1);
-    pet.garden[plot] = Plot{crop, now_ms};
+bool plant(const Pack& pack, Home& home, int plot, int crop, uint64_t now_ms) {
+    if (home.garden[plot].crop >= 0 || count(home, pack.crops[crop].seed) <= 0) return false;
+    add_item(home, pack.crops[crop].seed, -1);
+    home.garden[plot] = Plot{crop, now_ms};
     return true;
 }
 
-int harvest(const Pack& pack, Pet& pet, int plot, uint64_t now_ms, uint32_t roll) {
-    Plot& p = pet.garden[plot];
+int harvest(const Pack& pack, Home& home, int plot, uint64_t now_ms, uint32_t roll) {
+    Plot& p = home.garden[plot];
     if (crop_stage(pack, p, now_ms) != kCropRipe) return 0;
     const Crop& c = pack.crops[p.crop];
-    add_item(pet, c.yields, c.count);
-    if (roll % 100 < 50) add_item(pet, c.seed, 1);
+    add_item(home, c.yields, c.count);
+    if (roll % 100 < 50) add_item(home, c.seed, 1);
     p = Plot{};
     return c.count;
 }
