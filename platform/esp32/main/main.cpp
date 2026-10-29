@@ -7,6 +7,7 @@
 #include "board.h"
 #include "display.h"
 #include "driver/gpio.h"
+#include "driver/ledc.h"
 #include "esp_littlefs.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -41,6 +42,19 @@ public:
     }
 
     void present(const vpet::Framebuffer& fb) override { display_present(fb); }
+
+    // Piezo via LEDC PWM: 50% duty for a tone, 0% (pin low) for silence.
+    void set_tone(uint16_t freq_hz) override {
+        if (!piezo_ready) return;
+        if (freq_hz == 0) {
+            ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
+        } else {
+            ledc_set_freq(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0, freq_hz);
+            ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 512);  // 50% of 10-bit
+        }
+        ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+    }
+    bool piezo_ready = false;
 
     bool read_file(const std::string& path, std::string& out) override {
         std::ifstream f(path, std::ios::binary);
@@ -77,6 +91,25 @@ void hold_power_and_quiet_buzzer() {
     gpio_reset_pin(gpio_num_t(PIN_BUZZER));
     gpio_set_direction(gpio_num_t(PIN_BUZZER), GPIO_MODE_OUTPUT);
     gpio_set_level(gpio_num_t(PIN_BUZZER), 0);
+}
+
+// Sets up LEDC PWM on the piezo pin. Returns false when sound is disabled.
+bool init_piezo() {
+    if (CONFIG_VPET_PIN_PIEZO < 0) return false;
+    ledc_timer_config_t timer = {};
+    timer.speed_mode = LEDC_LOW_SPEED_MODE;
+    timer.duty_resolution = LEDC_TIMER_10_BIT;
+    timer.timer_num = LEDC_TIMER_0;
+    timer.freq_hz = 2000;
+    timer.clk_cfg = LEDC_AUTO_CLK;
+    if (ledc_timer_config(&timer) != ESP_OK) return false;
+    ledc_channel_config_t ch = {};
+    ch.gpio_num = CONFIG_VPET_PIN_PIEZO;
+    ch.speed_mode = LEDC_LOW_SPEED_MODE;
+    ch.channel = LEDC_CHANNEL_0;
+    ch.timer_sel = LEDC_TIMER_0;
+    ch.duty = 0;  // silent and low until a tone plays
+    return ledc_channel_config(&ch) == ESP_OK;
 }
 
 void init_buttons() {
@@ -133,6 +166,7 @@ extern "C" void app_main() {
 
     // Heap, not stack: the game holds a 28 KB framebuffer.
     auto* platform = new Esp32Platform();
+    platform->piezo_ready = init_piezo();
     auto* game = new vpet::Game(*platform);
     if (game->init("/packs")) benchmark(*game);
     else ESP_LOGE(TAG, "pack failed to load; error shown on screen");

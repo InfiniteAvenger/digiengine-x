@@ -1,7 +1,8 @@
 idf_component_register(
     SRCS main.cpp display.cpp rtc.cpp
     INCLUDE_DIRS .
-    REQUIRES vpet_engine esp_lcd esp_driver_gpio esp_driver_i2c esp_driver_spi esp_timer joltwallet__littlefs)
+    REQUIRES vpet_engine esp_lcd esp_driver_gpio esp_driver_i2c esp_driver_spi esp_driver_ledc esp_timer
+             joltwallet__littlefs)
 
 # Stand-in clock until there is an on-device clock screen: the build PC's UTC
 # time (used only when the RTC has never been set) and its UTC offset.

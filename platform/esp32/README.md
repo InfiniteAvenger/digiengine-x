@@ -49,11 +49,22 @@ every 10 seconds.
 The RTC stores UTC. When it has never been set (or its backup battery died),
 the firmware sets it to the time it was **built**, and uses the build PC's UTC
 offset for bedtimes. Flash soon after building, and rebuild after a daylight
-saving change. An on-device clock screen will replace this.
+saving change, or set the time on the device (see below).
 
 ## Not done yet
 
-- Clock / time zone setting screen
 - Battery level, sleep and screen-off when idle
-- Buzzer sounds
 - Baked binary packs (packs load from JSON on flash for now)
+
+## Sound
+
+Beeps and jingles play through the onboard buzzer with LEDC PWM. Change the
+pin (or set **-1** for no sound) in `idf.py menuconfig` -> **vpet board** ->
+*Piezo / buzzer GPIO*. Players can also mute in the settings menu (hold A+C).
+When silent the pin is held low, as Waveshare recommends.
+
+## Setting the clock on the device
+
+Hold A+C for 3 seconds -> **CLOCK**. A adds one, B moves to the minutes and
+then saves, C cancels. This adjusts local time (bedtimes, day and night)
+and is remembered across restarts.

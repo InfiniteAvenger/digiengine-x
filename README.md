@@ -38,7 +38,8 @@ cmake --build build
 | C      | `C`, `3`, Right | Cancel / back                |
 
 `Esc` quits. **Hold A+C for 3 seconds** on any screen to open settings: switch
-packs and versions, pick equipped moves, and see pack info.
+packs and versions, pick equipped moves, turn sound on or off, set the clock,
+and see pack info.
 
 Every folder in `packs/` with a `pack.json` is a pack. Put your own packs there
 (they stay out of git) and they are copied next to the game when it builds.

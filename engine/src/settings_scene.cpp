@@ -1,6 +1,8 @@
 // Hidden settings (hold A+C for 3 seconds): switch packs and versions, pick
 // equipped moves, and see pack info. Built on the shared list screen.
 #include <algorithm>
+#include <cstdio>
+#include "font.h"
 #include "list_scene.h"
 #include "vpet/rpg.h"
 
@@ -45,6 +47,61 @@ std::unique_ptr<Scene> make_about(Game& g) {
     return std::make_unique<ListScene>(g, "ABOUT", rows, detail, [](int) {}, "", true);
 }
 
+// Set the local time: A adds one to the chosen field, B moves on (and saves
+// after the minutes), C cancels.
+class ClockScene : public Scene {
+public:
+    explicit ClockScene(Game& game) : Scene(game) {
+        int m = game.local_minute();
+        hour_ = m / 60;
+        minute_ = m % 60;
+    }
+    bool is_settings() const override { return true; }
+
+    void on_press(Button b) override {
+        if (b == BTN_C) return game_.pop();
+        if (b == BTN_A) {
+            if (field_ == 0) hour_ = (hour_ + 1) % 24;
+            else minute_ = (minute_ + 1) % 60;
+        } else if (field_ == 0) {
+            field_ = 1;
+        } else {
+            game_.set_local_time(hour_, minute_);
+            game_.toast("CLOCK SET");
+            game_.pop();
+        }
+    }
+
+    void draw(Framebuffer& fb) override {
+        const Theme& t = game_.pack().theme;
+        draw_title(fb, t, "CLOCK");
+        char hh[3], mm[3];
+        std::snprintf(hh, sizeof hh, "%02d", hour_);
+        std::snprintf(mm, sizeof mm, "%02d", minute_);
+        // Big digits: the 3x5 font drawn at 3x scale into a temporary sprite.
+        auto big = [&](int x, const char* text, bool selected) {
+            fb.panel(x - 3, 34, 30, 24, selected ? mix(t.ui, t.accent, 80) : mix(t.ui, t.ui_text, 20),
+                     selected ? t.accent : mix(t.ui, t.ui_text, 60));
+            for (int c = 0; c < 2; ++c)
+                if (const char* g = glyph_for(text[c]))
+                    for (int gy = 0; gy < 5; ++gy)
+                        for (int gx = 0; gx < 3; ++gx)
+                            if (g[gy * 3 + gx] == '#') fb.fill_rect(x + c * 12 + gx * 3, 39 + gy * 3, 3, 3, t.ui_text);
+        };
+        big(28, hh, field_ == 0);
+        fb.fill_rect(59, 42, 2, 2, t.ui_text);
+        fb.fill_rect(59, 49, 2, 2, t.ui_text);
+        big(67, mm, field_ == 1);
+        fb.draw_text_centered(66, field_ == 0 ? "SET THE HOUR" : "SET THE MINUTES", mix(t.ui_text, t.ui, 60));
+        fb.draw_text_centered(78, "CHANGES LOCAL TIME ONLY", mix(t.ui_text, t.ui, 100));
+        draw_footer(fb, t, field_ == 0 ? "A: +1 B: NEXT C: BACK" : "A: +1 B: SAVE C: BACK");
+    }
+
+private:
+    int hour_ = 0, minute_ = 0;
+    int field_ = 0;  // 0 hours, 1 minutes
+};
+
 }  // namespace
 
 std::unique_ptr<Scene> make_moves_scene(Game& g) {
@@ -85,13 +142,19 @@ std::unique_ptr<Scene> make_settings_scene(Game& game) {
         std::string pack = g->pack_names()[size_t(g->pack_index())], version = p.rosters[size_t(g->roster_index())].name;
         for (std::string* s : {&pack, &version})
             for (char& ch : *s) ch = char(toupper(static_cast<unsigned char>(ch)));
-        return std::vector<Row>{{"PACK", pack, c}, {"VERSION", version, c}, {"MOVES", "", c}, {"ABOUT", "", c}};
+        char clock[6];
+        int m = g->local_minute();
+        std::snprintf(clock, sizeof clock, "%02d:%02d", m / 60, m % 60);
+        return std::vector<Row>{{"PACK", pack, c},  {"VERSION", version, c}, {"MOVES", "", c},
+                                {"SOUND", g->sound_on() ? "ON" : "OFF", c}, {"CLOCK", clock, c}, {"ABOUT", "", c}};
     };
     auto detail = [g](int row) {
         switch (row) {
             case 0: return std::string(g->pack_names().size() > 1 ? "SWITCH TO ANOTHER INSTALLED PACK" : "ONLY ONE PACK INSTALLED");
             case 1: return std::string(g->pack().rosters.size() > 1 ? "B: NEXT VERSION. USED FOR NEW EGGS" : "THIS PACK HAS ONE VERSION");
             case 2: return std::string("CHOOSE YOUR 3 EQUIPPED MOVES");
+            case 3: return std::string("B: TURN BEEPS AND JINGLES ON OR OFF");
+            case 4: return std::string("SET THE TIME OF DAY (BEDTIMES, SKY)");
             default: return std::string("PACK DETAILS");
         }
     };
@@ -106,6 +169,11 @@ std::unique_ptr<Scene> make_settings_scene(Game& game) {
                 if (g->species().stage == Stage::Egg) g->toast("STILL AN EGG");
                 else g->push(make_moves_scene(*g));
                 break;
+            case 3:
+                g->set_sound(!g->sound_on());
+                g->toast(g->sound_on() ? "SOUND ON" : "SOUND OFF");
+                break;
+            case 4: g->push(std::make_unique<ClockScene>(*g)); break;
             default: g->push(make_about(*g)); break;
         }
     };

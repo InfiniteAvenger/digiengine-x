@@ -268,6 +268,7 @@ public:
         if (phase_ == Phase::Play) {
             mini_.update(now);
             if (mini_.done()) {
+                game_.sfx(mini_.success() ? Game::Sfx::Hit : Game::Sfx::Miss);
                 phase_ = Phase::Result;
                 result_at_ = now;
                 strength_before_ = game_.pet().strength;

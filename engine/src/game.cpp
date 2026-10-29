@@ -1,6 +1,8 @@
 #include "vpet/game.h"
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
+#include <sstream>
 #include "scenes.h"
 #include "vpet/json.h"
 
@@ -38,14 +40,21 @@ bool Game::init(const std::string& root) {
         pack_names_.push_back(Json::parse(text, j, err) ? j["name"].str_or(folder) : folder);
     }
 
-    // Reopen the pack used last time.
+    // Shared settings: the last pack used, sound, and the clock adjustment.
     int choice = 0;
     std::string settings;
     if (platform_.load_save("settings", settings)) {
-        size_t at = settings.find("pack ");
-        std::string last = at == std::string::npos ? "" : settings.substr(at + 5, settings.find('\n', at) - at - 5);
-        for (size_t i = 0; i < pack_dirs_.size(); ++i)
-            if (pack_dirs_[i] == last) choice = int(i);
+        std::istringstream in(settings);
+        for (std::string line; std::getline(in, line);) {
+            if (line.rfind("pack ", 0) == 0) {
+                for (size_t i = 0; i < pack_dirs_.size(); ++i)
+                    if (pack_dirs_[i] == line.substr(5)) choice = int(i);
+            } else if (line.rfind("sound ", 0) == 0) {
+                sound_on_ = line.substr(6) != "0";
+            } else if (line.rfind("clock_adjust ", 0) == 0) {
+                clock_adjust_s_ = int32_t(std::strtol(line.c_str() + 13, nullptr, 10));
+            }
+        }
     }
     if (open_pack(choice)) return true;
     if (choice != 0 && open_pack(0)) return true;  // the last one broke; fall back
@@ -73,12 +82,83 @@ bool Game::open_pack(int index) {
         new_egg();
     }
     last_save_ = now_;
-    platform_.write_save("settings", "pack " + pack_dirs_[index] + "\n");
+    save_settings();
 
     stack_.clear();
     pending_pops_ = 0;
     push(make_home_scene(*this));
     return true;
+}
+
+void Game::save_settings() {
+    platform_.write_save("settings", "pack " + pack_dirs_[size_t(pack_index_)] + "\nsound " + (sound_on_ ? "1" : "0") +
+                                         "\nclock_adjust " + std::to_string(clock_adjust_s_) + "\n");
+}
+
+void Game::set_sound(bool on) {
+    sound_on_ = on;
+    if (!on) {
+        notes_.clear();
+        platform_.set_tone(0);
+    }
+    save_settings();
+}
+
+void Game::set_local_time(int hour, int minute) {
+    int64_t local_s = int64_t(now_ / 1000) + platform_.utc_offset_s() + clock_adjust_s_;
+    int64_t current = ((local_s % 86400) + 86400) % 86400;
+    int64_t delta = int64_t(hour * 3600 + minute * 60) - current;
+    delta = ((delta + 43200) % 86400 + 86400) % 86400 - 43200;  // shortest way round the clock
+    clock_adjust_s_ = int32_t(clock_adjust_s_ + delta);
+    utc_offset_s_ = platform_.utc_offset_s() + clock_adjust_s_;
+    save_settings();
+}
+
+void Game::sfx(Sfx s) {
+    if (!sound_on_) return;
+    // Original little cues: frequency (Hz) and length (ms); 0 Hz is a rest.
+    static const std::vector<Note> kBlip = {{2400, 25}};
+    static const std::vector<Note> kCall = {{1400, 90}, {0, 40}, {1000, 90}, {0, 40}, {1400, 90}, {0, 40}, {1000, 90}};
+    static const std::vector<Note> kHatch = {{880, 80}, {1175, 80}, {1760, 160}};
+    static const std::vector<Note> kEvolve = {{523, 90}, {659, 90}, {784, 90}, {1047, 240}};
+    static const std::vector<Note> kClear = {{784, 80}, {988, 80}, {1175, 80}, {1568, 200}};
+    static const std::vector<Note> kHit = {{1800, 40}, {2400, 60}};
+    static const std::vector<Note> kMiss = {{300, 120}};
+    static const std::vector<Note> kMistake = {{600, 120}, {400, 200}};
+    static const std::vector<Note> kFainted = {{523, 150}, {392, 150}, {262, 300}};
+    const std::vector<Note>* seq = nullptr;
+    switch (s) {
+        case Sfx::Blip:
+            if (note_index_ < notes_.size()) return;  // don't cut off a jingle with a click
+            seq = &kBlip;
+            break;
+        case Sfx::Call: seq = &kCall; break;
+        case Sfx::Hatch: seq = &kHatch; break;
+        case Sfx::Evolve: seq = &kEvolve; break;
+        case Sfx::Clear: seq = &kClear; break;
+        case Sfx::Hit: seq = &kHit; break;
+        case Sfx::Miss: seq = &kMiss; break;
+        case Sfx::Mistake: seq = &kMistake; break;
+        case Sfx::Fainted: seq = &kFainted; break;
+    }
+    notes_ = *seq;
+    note_index_ = 0;
+    note_end_ = 0;  // start on the next update
+}
+
+void Game::update_sound() {
+    if (note_index_ >= notes_.size()) return;
+    if (note_end_ && now_ < note_end_) return;
+    if (note_end_) ++note_index_;  // the current note just finished
+    if (note_index_ >= notes_.size()) {
+        platform_.set_tone(0);
+        notes_.clear();
+        note_index_ = 0;
+        note_end_ = 0;
+        return;
+    }
+    platform_.set_tone(notes_[note_index_].hz);
+    note_end_ = now_ + notes_[note_index_].ms;
 }
 
 int Game::roster_index() const {
@@ -117,8 +197,15 @@ void Game::frame() {
     }
 
     // The first frame after loading a save replays all the time it was closed.
-    utc_offset_s_ = platform_.utc_offset_s();
+    utc_offset_s_ = platform_.utc_offset_s() + clock_adjust_s_;
     uint32_t ev = simulate(pack_, save_.active, now_, utc_offset_s_);
+    if (ev & EV_HATCHED) sfx(Sfx::Hatch);
+    else if (ev & EV_EVOLVED) sfx(Sfx::Evolve);
+    else if (ev & EV_MISTAKE) sfx(Sfx::Mistake);
+    bool attention = save_.active.needs_attention();
+    if (attention && !attention_was_) sfx(Sfx::Call);
+    attention_was_ = attention;
+    if (pressed) sfx(Sfx::Blip);
     if (ev & EV_DIED) {
         // Old age. Home, garden and cryo are kept; a new egg arrives.
         std::string name = species().name;
@@ -178,6 +265,7 @@ void Game::frame() {
     }
 
     platform_.present(fb_);
+    update_sound();
 
     if (pressed || popped || (ev & ~EV_POOPED) || now_ - last_save_ >= kAutosaveMs) save();
 }

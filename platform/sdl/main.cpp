@@ -1,6 +1,7 @@
 // Desktop frontend. Android will reuse this file through SDL's Android port.
 #include <SDL.h>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <ctime>
 #include <filesystem>
@@ -38,6 +39,29 @@ public:
         if (k[SDL_SCANCODE_C] || k[SDL_SCANCODE_3] || k[SDL_SCANCODE_RIGHT]) b |= vpet::BTN_C;
         return b;
     }
+
+    void set_tone(uint16_t freq_hz) override { tone_hz.store(freq_hz); }
+
+    // Square-wave synth on SDL's audio thread; follows tone_hz.
+    static void audio_callback(void* user, Uint8* stream, int len) {
+        auto* self = static_cast<SdlPlatform*>(user);
+        auto* out = reinterpret_cast<int16_t*>(stream);
+        int n = len / int(sizeof(int16_t));
+        uint16_t hz = self->tone_hz.load();
+        for (int i = 0; i < n; ++i) {
+            if (hz == 0) {
+                out[i] = 0;
+                continue;
+            }
+            self->phase += float(hz) / float(kSampleRate);
+            if (self->phase >= 1.0f) self->phase -= 1.0f;
+            out[i] = self->phase < 0.5f ? kVolume : int16_t(-kVolume);
+        }
+    }
+    static constexpr int kSampleRate = 22050;
+    static constexpr int16_t kVolume = 2500;  // quiet: about 8% of full scale
+    std::atomic<uint16_t> tone_hz{0};
+    float phase = 0;
 
     void present(const vpet::Framebuffer& fb) override {
         SDL_UpdateTexture(texture_, nullptr, fb.pixels(), vpet::kScreenW * int(sizeof(vpet::Color)));
@@ -83,7 +107,7 @@ private:
 }  // namespace
 
 int main(int argc, char* argv[]) {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return 1;
     }
@@ -121,6 +145,17 @@ int main(int argc, char* argv[]) {
     SDL_free(pref);
 
     SdlPlatform platform(renderer, texture, save_dir);
+
+    // Sound is optional: if no audio device opens, the game just stays quiet.
+    SDL_AudioSpec want{}, have{};
+    want.freq = SdlPlatform::kSampleRate;
+    want.format = AUDIO_S16SYS;
+    want.channels = 1;
+    want.samples = 512;
+    want.callback = SdlPlatform::audio_callback;
+    want.userdata = &platform;
+    SDL_AudioDeviceID audio = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
+    if (audio) SDL_PauseAudioDevice(audio, 0);
     vpet::Game game(platform);
     if (!game.init(pack_dir)) SDL_Log("failed to load pack from %s", pack_dir.c_str());
 
@@ -139,6 +174,7 @@ int main(int argc, char* argv[]) {
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+    if (audio) SDL_CloseAudioDevice(audio);
     SDL_Quit();
     return 0;
 }

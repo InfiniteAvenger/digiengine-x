@@ -21,6 +21,9 @@ public:
     // Bitmask of currently held buttons.
     virtual uint8_t buttons() = 0;
     virtual void present(const Framebuffer& fb) = 0;
+    // Plays a square-wave tone until the next call; 0 = silence. The engine
+    // sequences notes itself, so a platform only needs this one switch.
+    virtual void set_tone(uint16_t /*freq_hz*/) {}
     // Read-only content such as packs.
     virtual bool read_file(const std::string& path, std::string& out) = 0;
     // Names of the folders inside `path` (for finding installed packs).

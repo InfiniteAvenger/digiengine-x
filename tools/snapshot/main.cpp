@@ -32,6 +32,8 @@ public:
     int32_t utc_offset_s() override { return offset; }
     uint8_t buttons() override { return held; }
     void present(const vpet::Framebuffer& fb) override { last = fb; }
+    std::vector<uint16_t> tones;  // every frequency the engine asked for
+    void set_tone(uint16_t hz) override { tones.push_back(hz); }
     bool read_file(const std::string& path, std::string& out) override {
         std::ifstream f(path, std::ios::binary);
         if (!f) return false;
@@ -512,6 +514,38 @@ void settings_checks(const FakePlatform& base, const std::string& demo_dir) {
     g->init(root);
     check(g->pack().id == "demo", "the last pack used opens next time");
 
+    // Sound: a button press beeps; muting silences it and is remembered.
+    auto press_b = [&] {
+        q.held = vpet::BTN_C;  // C on the home screen just deselects: a harmless press
+        run(66);
+        q.held = 0;
+        run(300);
+    };
+    q.tones.clear();
+    press_b();
+    bool beeped = std::any_of(q.tones.begin(), q.tones.end(), [](uint16_t hz) { return hz > 0; });
+    bool ended_quiet = !q.tones.empty() && q.tones.back() == 0;
+    check(g->sound_on() && beeped && ended_quiet, "sound: a button press plays a beep, then goes quiet");
+    g->set_sound(false);
+    q.tones.clear();
+    press_b();
+    check(q.tones.empty() || std::all_of(q.tones.begin(), q.tones.end(), [](uint16_t hz) { return hz == 0; }),
+          "sound: muted, button presses make no tone");
+
+    // Clock: setting the local time shifts local time only.
+    vpet::Pet before_clock = g->pet();
+    g->set_local_time(7, 30);
+    check(g->local_minute() == 7 * 60 + 30, "clock: setting 07:30 makes local time 07:30");
+    check(g->pet().born_ms == before_clock.born_ms && g->pet().sim_ms == before_clock.sim_ms,
+          "clock: pet timers are untouched by setting the clock");
+    int32_t adjust = g->clock_adjust_s();
+    g = std::make_unique<vpet::Game>(q);
+    g->init(root);
+    run(66);
+    check(!g->sound_on() && g->clock_adjust_s() == adjust && g->local_minute() == 7 * 60 + 30,
+          "settings: mute and the clock survive a restart");
+    g->set_sound(true);
+
     // Versions: the chosen roster is saved.
     g->set_roster(0);
     g->save();
@@ -954,6 +988,14 @@ int main(int argc, char* argv[]) {
     press(vpet::BTN_A);
     press(vpet::BTN_B);
     shot("28_moves");
+    press(vpet::BTN_C);
+    press(vpet::BTN_A);
+    press(vpet::BTN_A);  // cursor on CLOCK
+    shot("29_settings_rows");
+    press(vpet::BTN_B);
+    shot("30_clock");
+    press(vpet::BTN_C);
+    press(vpet::BTN_C);
     press(vpet::BTN_C);
     press(vpet::BTN_C);
 

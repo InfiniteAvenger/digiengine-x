@@ -153,6 +153,7 @@ private:
             int atk = pet.run.atk_buff ? ps_.atk * 5 / 4 : ps_.atk;
             float adv = attribute_mult(pack, s.attribute, e.attribute);
             int dmg = damage(m.power, mult * adv, atk, es_.def);
+            game_.sfx(mult >= 1.1f ? Game::Sfx::Hit : Game::Sfx::Miss);
             ehp_ -= dmg;
             const char* rating = mult >= 1.4f ? "PERFECT! " : mult >= 1.1f ? "GREAT! " : mult < 0.75f ? "WEAK... " : "";
             msgs.push_back(s.name + " USED " + m.name + "!");
@@ -200,6 +201,7 @@ private:
         pet.run.best = std::max(pet.run.best, floor);
         ++pet.run.floor;
         ps_ = pet_stats(pack, pet);  // a level-up raises max HP
+        game_.sfx(Game::Sfx::Clear);
         say(msgs, Phase::Cleared);
     }
 
@@ -209,6 +211,7 @@ private:
         msgs.push_back("RUN ENDED ON FLOOR " + std::to_string(pet.run.floor));
         pet.run = Run{1, pet.run.best, -1, 0, 0};
         pet.sick = true;
+        game_.sfx(Game::Sfx::Fainted);
         say(msgs, Phase::Over);
     }
 

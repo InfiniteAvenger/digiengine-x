@@ -49,6 +49,17 @@ public:
     // Hold A+C this long to open settings from any screen.
     static constexpr uint64_t kSettingsHoldMs = 3000;
     bool settings_open() const { return !stack_.empty() && stack_.back()->is_settings(); }
+
+    // Sound cues, played as short square-wave note sequences (original).
+    enum class Sfx { Blip, Call, Hatch, Evolve, Clear, Hit, Miss, Mistake, Fainted };
+    void sfx(Sfx s);
+    bool sound_on() const { return sound_on_; }
+    void set_sound(bool on);
+
+    // Local clock: setting the time shifts only the local-time offset (bedtimes,
+    // day and night); pet timers run on absolute time and are unaffected.
+    void set_local_time(int hour, int minute);
+    int32_t clock_adjust_s() const { return clock_adjust_s_; }
     // Runs one frame: input, simulation, draw, present. Call 30-60x a second.
     void frame();
     // Writes the pet to its save slot. Also called automatically.
@@ -111,6 +122,21 @@ private:
     uint64_t last_save_ = 0;
     uint64_t flash_start_ = 0, eat_start_ = 0;
     int eat_item_ = -1;
+
+    // Settings shared by every pack, kept in the "settings" save slot.
+    void save_settings();
+    bool sound_on_ = true;
+    int32_t clock_adjust_s_ = 0;
+
+    // Tone sequencer: the notes playing now and when the current one ends.
+    struct Note {
+        uint16_t hz, ms;
+    };
+    void update_sound();
+    std::vector<Note> notes_;
+    size_t note_index_ = 0;
+    uint64_t note_end_ = 0;
+    bool attention_was_ = false;  // for the rising edge of a care call
     int32_t utc_offset_s_ = 0;
     uint8_t prev_buttons_ = 0;
     uint32_t rng_ = 0x9e3779b9u;

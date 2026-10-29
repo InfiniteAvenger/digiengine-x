@@ -26,6 +26,15 @@ menu "vpet board"
         range -1 48
         default -1
 
+    config VPET_PIN_PIEZO
+        int "Piezo / buzzer GPIO (-1 = no sound)"
+        range -1 48
+        default 33 if VPET_BOARD_REV_V1
+        default 42
+        help
+            Driven with LEDC PWM for beeps and jingles. Defaults to the
+            board's onboard buzzer for the selected revision.
+
     config VPET_PIN_BTN_C
         int "Button C GPIO"
         range 0 48
