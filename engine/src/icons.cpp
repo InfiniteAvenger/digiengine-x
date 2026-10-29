@@ -198,10 +198,23 @@ kbbbbbbk
 ..kkkk..
 )";
 
+// Forever Partner badge: a small infinity sign.
+constexpr const char* kForever = R"(size 9 5
+palette
+y ffcd75
+frame
+.yy...yy.
+y..y.y..y
+y...y...y
+y..y.y..y
+.yy...yy.
+)";
+
 }  // namespace
 
 const Icons& icons() {
-    static const Icons i{load(kPoop), load(kHeart), load(kAttention), load(kSick), load(kMenu), load(kKibble)};
+    static const Icons i{load(kPoop), load(kHeart),  load(kAttention), load(kSick),
+                         load(kMenu), load(kKibble), load(kForever)};
     return i;
 }
 

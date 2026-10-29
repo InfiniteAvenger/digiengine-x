@@ -107,6 +107,8 @@ public:
 
         if (page_ == 0) {
             row(18, "NAME", s.name);
+            if (pet.forever)  // Forever Partner badge after the name
+                fb.draw_sprite(icons().forever, 0, kValueX + Framebuffer::text_width(s.name) + 3, 18);
             row(27, "STAGE", stage_label(s.stage));
             row(36, "AGE", since(pet.born_ms));
             row(45, "IN FORM", since(pet.stage_ms));

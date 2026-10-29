@@ -11,6 +11,7 @@ struct Icons {
     Sprite sick;       // 7x7
     Sprite menu;       // 9x9 masks, one frame per home menu slot
     Sprite kibble;     // 8x8 bowl, the free food
+    Sprite forever;    // 9x5 infinity badge for Forever Partners
 };
 
 const Icons& icons();

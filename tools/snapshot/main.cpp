@@ -405,6 +405,7 @@ void cryo_checks(const FakePlatform& base, const std::string& demo_dir) {
 
     advance(3 * day);  // the new egg hatches and grows; the frozen pet must not
     uint64_t frozen_for = q.clock - g->cryo(0)->frozen_ms;
+    g->pet().sick = false;  // three untended days made the new pet sick; cure it before swapping
     check(g->cryo_swap(0, msg), "swapping a stored pet back in");
     const vpet::Pet& back = g->pet();
     check(back.species == blip && back.hunger == before.hunger && back.poop == before.poop &&
@@ -413,6 +414,9 @@ void cryo_checks(const FakePlatform& base, const std::string& demo_dir) {
     check(back.born_ms == before.born_ms + frozen_for && back.stage_ms == before.stage_ms + frozen_for,
           "age and form timers resume where they paused");
     check(g->cryo(0) && g->cryo(0)->frozen_ms == q.clock, "the other pet is now the one frozen");
+    g->pet().sick = true;
+    check(!g->cryo_swap(0, msg) && !g->cryo_store(1, msg) && msg == "CURE IT FIRST", "a sick pet can't be frozen or swapped");
+    g->pet().sick = false;
 
     vpet::Pet stored = *g->cryo(0);
     g->save();

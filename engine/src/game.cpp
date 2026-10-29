@@ -196,6 +196,7 @@ void Game::new_egg() {
 bool Game::cryo_store(int slot, std::string& msg) {
     if (save_.cryo[slot]) return msg = "SLOT IS FULL", false;
     if (species().stage == Stage::Egg) return msg = "EGGS CAN'T BE FROZEN", false;
+    if (save_.active.sick) return msg = "CURE IT FIRST", false;
     freeze(save_.active, now_);
     save_.cryo[slot] = save_.active;
     new_egg();
@@ -207,6 +208,7 @@ bool Game::cryo_store(int slot, std::string& msg) {
 bool Game::cryo_swap(int slot, std::string& msg) {
     if (!save_.cryo[slot]) return msg = "SLOT IS EMPTY", false;
     if (species().stage == Stage::Egg) return msg = "EGGS CAN'T BE FROZEN", false;
+    if (save_.active.sick) return msg = "CURE IT FIRST", false;
     Pet stored = *save_.cryo[slot];
     freeze(save_.active, now_);
     save_.cryo[slot] = save_.active;
