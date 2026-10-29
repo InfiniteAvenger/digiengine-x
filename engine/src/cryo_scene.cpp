@@ -45,7 +45,7 @@ public:
             const Species& s = pack.species[pet->species];
             fb.draw_sprite(s.sprite, 0, kScreenW - 26, y + 5, 1);
             fb.draw_text(7, y + 11, s.name, t.ui_text);
-            std::string info = std::string(stage_name(s.stage)) + " LV" + std::to_string(pet->level);
+            std::string info = std::string(stage_label(s.stage)) + " LV" + std::to_string(pet->level);
             if (frozen) info += "  " + format_duration(now > pet->frozen_ms ? now - pet->frozen_ms : 0);
             for (char& c : info) c = char(toupper(static_cast<unsigned char>(c)));
             fb.draw_text(7, y + 18, info, frozen ? ice : mix(t.ui_text, t.ui, 70));

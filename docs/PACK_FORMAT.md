@@ -39,10 +39,11 @@ packs/my_pack/
 | `format`              | Must be `1`.                                             |
 | `theme`               | Hex `rrggbb` colors for the home screen and menus.       |
 | `rosters`             | Selectable "device versions". `eggs` lists starter IDs.  |
-| `species[].stage`     | `egg`, `infant`, `child`, `adult`, `perfect`, `ultimate` (old `baby`/`baby2` load as `infant`) |
+| `species[].stage`     | `egg`, `baby1`, `baby2`, `child`, `adult`, `perfect`, `ultimate`, `super_ultimate` (old `infant`/`baby` load as `baby1`) |
 | `species[].sprite`    | Path to a sprite file, relative to the pack folder.      |
 | `species[].evolve`    | Rules checked in order; the first one that passes wins.  |
 | `species[].family`    | Ecological family (`beast`, `machine`, `plant`, `dark`, ...) used for quest drops |
+| `species[].attribute` | One of the pack's `attributes` (see below); blank = neutral |
 | `species[].care`      | Optional. How fast needs change; see below.              |
 
 ### care
@@ -62,11 +63,13 @@ Stage defaults (hunger / strength / poop minutes, bedtime, weight):
 
 | Stage    | Needs (min) | Bedtime     | Weight |
 |----------|-------------|-------------|--------|
-| infant   | 3 / 3 / 3   | 20:00-09:00 | 5      |
+| baby1    | 3 / 3 / 3   | 20:00-09:00 | 5      |
+| baby2    | 30 / 30 / 60 | 20:00-09:00 | 10    |
 | child    | 48 / 48 / 120 | 21:00-08:00 | 20   |
 | adult    | 59 / 59 / 120 | 22:00-08:00 | 30   |
 | perfect  | 66 / 66 / 120 | 23:00-09:00 | 40   |
 | ultimate | 75 / 75 / 120 | 23:00-09:00 | 50   |
+| super_ultimate | 85 / 85 / 150 | 23:00-09:00 | 60 |
 
 ### Combat fields on a species
 
@@ -221,7 +224,8 @@ has a tier appears on that tier's floors, with its own art, stats and moves:
     { "stage": "child",    "min_floor": 1,  "max_floor": 9 },
     { "stage": "adult",    "min_floor": 10, "max_floor": 19 },
     { "stage": "perfect",  "min_floor": 20, "max_floor": 29 },
-    { "stage": "ultimate", "min_floor": 30 }
+    { "stage": "ultimate", "min_floor": 30, "max_floor": 49 },
+    { "stage": "super_ultimate", "min_floor": 40 }
   ]
 }
 ```
@@ -260,3 +264,21 @@ egg arrives; the bag, garden and cryo slots are kept.
 An item with `"effect": { "forever": true }` makes the pet a Forever Partner:
 it never passes on. The demo pack's FOREVER CHIP is crafted from 2 core
 shards, 2 glow roots and 2 power cells.
+
+## Attributes
+
+A pack may define a rock-paper-scissors style table. A creature (or enemy)
+whose attribute beats its target's deals **1.25x** damage; against an attribute
+that beats it, **0.75x**. Anything else, including a blank attribute, is 1x.
+
+```json
+"attributes": {
+  "sun":  { "beats": ["moon"] },
+  "moon": { "beats": ["star"] },
+  "star": { "beats": ["sun"] },
+  "void": { "beats": [] }
+}
+```
+
+When a pack defines attributes, every creature's and enemy's `attribute`
+must be one of them (or blank). The status screen and battle HUD show it.

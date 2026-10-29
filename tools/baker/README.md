@@ -31,7 +31,8 @@ See `sample/` for a complete, working example made from original CC0 art.
 |---|---|
 | `id` | Unique id (required) |
 | `name` | Display name (defaults to id) |
-| `stage` | `egg`, `infant`, `child`, `adult`, `perfect`, `ultimate` (required) |
+| `stage` | `egg`, `baby1`, `baby2`, `child`, `adult`, `perfect`, `ultimate`, `super_ultimate` (required) |
+| `attribute` | One of the pack's attributes (base.json), or blank |
 | `family` | `beast`, `machine`, `plant`, `dark`, or any family the pack defines |
 | `sprite` | Path to a PNG strip or `.spr` file (required) |
 | `frame_w`, `frame_h` | Frame size, only for non-square frames |

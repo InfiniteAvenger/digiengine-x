@@ -151,17 +151,19 @@ private:
             if (move < 0) return;
             const Move& m = pack.moves[move];
             int atk = pet.run.atk_buff ? ps_.atk * 5 / 4 : ps_.atk;
-            int dmg = damage(m.power, mult, atk, es_.def);
+            float adv = attribute_mult(pack, s.attribute, e.attribute);
+            int dmg = damage(m.power, mult * adv, atk, es_.def);
             ehp_ -= dmg;
             const char* rating = mult >= 1.4f ? "PERFECT! " : mult >= 1.1f ? "GREAT! " : mult < 0.75f ? "WEAK... " : "";
             msgs.push_back(s.name + " USED " + m.name + "!");
-            msgs.push_back(std::string(rating) + std::to_string(dmg) + " DAMAGE");
+            const char* edge = adv > 1.0f ? "ADVANTAGE! " : adv < 1.0f ? "RESISTED. " : "";
+            msgs.push_back(std::string(rating) + edge + std::to_string(dmg) + " DAMAGE");
         };
         auto enemy_turn = [&] {
             const Move& m = pack.moves[e.moves[game_.rand() % e.moves.size()]];
             float roll = 0.8f + float(game_.rand() % 41) / 100.0f;
             int def = pet.run.def_buff ? ps_.def * 5 / 4 : ps_.def;
-            int dmg = damage(m.power, roll, es_.atk, def);
+            int dmg = damage(m.power, roll * attribute_mult(pack, e.attribute, s.attribute), es_.atk, def);
             pet.run.hp -= dmg;
             msgs.push_back(e.name + " USED " + m.name + "!");
             msgs.push_back(s.name + " TOOK " + std::to_string(dmg));
@@ -264,6 +266,12 @@ void QuestScene::draw(Framebuffer& fb) {
         fb.draw_sprite(e.sprite, 0, 80, kArenaTop + 10 + bob, 2);
         fb.panel(3, 15, 54, 14, mix(t.ui, t.bg_top, 40), mix(t.ui, t.ui_text, 70));
         fb.draw_text(5, 17, e.name, boss_ ? t.accent : t.ui_text);
+        if (!e.attribute.empty()) {  // 3-letter attribute tag, right-aligned, when it fits
+            std::string tag = e.attribute.substr(0, 3);
+            for (char& c : tag) c = char(toupper(static_cast<unsigned char>(c)));
+            if (Framebuffer::text_width(e.name) + Framebuffer::text_width(tag) + 3 <= 50)
+                fb.draw_text(55 - Framebuffer::text_width(tag), 17, tag, dim);
+        }
         draw_bar(fb, 5, 24, 50, 3, ehp_, es_.hp, rgb(0xe0, 0x40, 0x50), dim);
     }
 

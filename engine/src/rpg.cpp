@@ -187,6 +187,16 @@ EnemyPick pick_enemy(const Pack& pack, int floor, uint32_t rnd) {
     if (regulars.empty())  // only bosses exist
         for (size_t i = 0; i < pack.enemies.size(); ++i) regulars.push_back(int(i));
     if (regulars.empty()) return {};
+    if (boss_floor) {
+        // No boss written for this floor: promote one from the strongest tier
+        // in range (the one that starts deepest).
+        int deepest = 0;
+        for (int i : regulars) deepest = std::max(deepest, pack.enemies[i].min_floor);
+        std::vector<int> strongest;
+        for (int i : regulars)
+            if (pack.enemies[i].min_floor == deepest) strongest.push_back(i);
+        regulars.swap(strongest);
+    }
     int idx = regulars[rnd % regulars.size()];
     return {idx, boss_floor || pack.enemies[idx].boss};
 }
@@ -197,5 +207,17 @@ int damage(int power, float mult, int atk, int def) {
 }
 
 uint32_t floor_xp(int floor) { return uint32_t(5 + 3 * floor); }
+
+float attribute_mult(const Pack& pack, const std::string& attacker, const std::string& defender) {
+    if (attacker.empty() || defender.empty()) return 1.0f;
+    auto beats = [&](const std::string& a, const std::string& b) {
+        for (const auto& [name, list] : pack.attributes)
+            if (name == a) return std::find(list.begin(), list.end(), b) != list.end();
+        return false;
+    };
+    if (beats(attacker, defender)) return 1.25f;
+    if (beats(defender, attacker)) return 0.75f;
+    return 1.0f;
+}
 
 }  // namespace vpet

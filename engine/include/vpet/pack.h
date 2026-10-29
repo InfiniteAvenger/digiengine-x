@@ -9,12 +9,13 @@ namespace vpet {
 
 class Platform;
 
-// The 6-stage lifecycle.
-enum class Stage : uint8_t { Egg, Infant, Child, Adult, Perfect, Ultimate };
-constexpr int kStageCount = 6;
+// The 8-stage lifecycle.
+enum class Stage : uint8_t { Egg, Baby1, Baby2, Child, Adult, Perfect, Ultimate, SuperUltimate };
+constexpr int kStageCount = 8;
 
-const char* stage_name(Stage s);
-// Accepts the stage names above (lowercase); "baby" and "baby2" load as infant.
+const char* stage_name(Stage s);   // id used in packs, e.g. "baby1"
+const char* stage_label(Stage s);  // shown on screen, e.g. "BABY I"
+// Accepts the stage ids; older names "infant" and "baby" load as baby1.
 bool parse_stage(const std::string& s, Stage& out);
 
 // One branch of an evolution. A creature's rules are tried in order and the
@@ -110,7 +111,7 @@ struct Drop {
 };
 
 struct Enemy {
-    std::string id, name, family;
+    std::string id, name, family, attribute;
     Sprite sprite;
     Stats stats;  // at min_floor; grows 15% per floor above it
     std::vector<int> moves;
@@ -138,7 +139,8 @@ struct Species {
     Sprite sprite;
     Care care;
     Stats stats;
-    std::string family;  // shared drop table, e.g. "beast"
+    std::string family;     // shared drop table, e.g. "beast"
+    std::string attribute;  // for the pack's attribute advantages; empty = neutral
     bool enemy = true;   // may appear in quests (its stage must have a tier)
     std::vector<LearnRule> learns;
     std::vector<EvolveRule> evolve;
@@ -170,6 +172,8 @@ struct Pack {
     std::vector<Enemy> enemies;  // hand-written ones, then one per eligible creature
     std::vector<std::pair<std::string, std::vector<Drop>>> family_drops;
     std::vector<EnemyTier> tiers;
+    // Attribute advantages: name -> the attributes it beats. Empty = none.
+    std::vector<std::pair<std::string, std::vector<std::string>>> attributes;
     std::vector<std::pair<int, int>> start_items;  // given with a new egg
     uint32_t lifespan_s = 0;                       // old age, from birth; 0 = none
 

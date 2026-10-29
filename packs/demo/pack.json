@@ -28,7 +28,7 @@
     {
       "id": "blip",
       "name": "Blip",
-      "stage": "infant",
+      "stage": "baby1",
       "family": "plant",
       "sprite": "sprites/blip.spr",
       "care": {
@@ -129,7 +129,8 @@
       { "stage": "child", "min_floor": 1, "max_floor": 9 },
       { "stage": "adult", "min_floor": 10, "max_floor": 19 },
       { "stage": "perfect", "min_floor": 20, "max_floor": 29 },
-      { "stage": "ultimate", "min_floor": 30 }
+      { "stage": "ultimate", "min_floor": 30, "max_floor": 49 },
+      { "stage": "super_ultimate", "min_floor": 40 }
     ]
   },
 

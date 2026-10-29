@@ -64,6 +64,9 @@ struct EnemyPick {
 EnemyPick pick_enemy(const Pack& pack, int floor, uint32_t rnd);
 // mult is the minigame result, about 0.5 (poor) to 1.5 (perfect).
 int damage(int power, float mult, int atk, int def);
+// Attribute advantage from the pack: 1.25 if `attacker` beats `defender`,
+// 0.75 if the reverse, else 1.
+float attribute_mult(const Pack& pack, const std::string& attacker, const std::string& defender);
 uint32_t floor_xp(int floor);
 // Rolls each drop; `rng` is called once per drop and must return 0..9999.
 template <typename Rng>

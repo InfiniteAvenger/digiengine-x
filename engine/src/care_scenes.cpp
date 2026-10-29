@@ -107,7 +107,7 @@ public:
 
         if (page_ == 0) {
             row(18, "NAME", s.name);
-            row(27, "STAGE", stage_name(s.stage));
+            row(27, "STAGE", stage_label(s.stage));
             row(36, "AGE", since(pet.born_ms));
             row(45, "IN FORM", since(pet.stage_ms));
             row(54, "WEIGHT", std::to_string(pet.weight) + "G");
@@ -140,8 +140,11 @@ public:
             row(36, "HP", std::to_string(st.hp));
             row(45, "ATK DEF", std::to_string(st.atk) + "  " + std::to_string(st.def));
             row(54, "SPD", std::to_string(st.spd));
-            row(63, "BEST FLOOR", std::to_string(pet.run.best));
-            int y = 74;
+            std::string attr = s.attribute.empty() ? "-" : s.attribute;
+            for (char& c : attr) c = char(toupper(static_cast<unsigned char>(c)));
+            row(63, "ATTRIBUTE", attr);
+            row(72, "BEST FLOOR", std::to_string(pet.run.best));
+            int y = 82;
             fb.draw_text(kLabelX, y, "MOVES", t.accent);
             for (int m : equipped_moves(pack, pet)) {
                 fb.draw_text(kValueX, y, pack.moves[m].name, t.ui_text);

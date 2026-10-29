@@ -11,6 +11,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include "vpet/game.h"
 #include "baker.h"
 #include "vpet/minigame.h"
@@ -205,6 +206,16 @@ void pack_tool_checks(FakePlatform& p, const std::string& demo_dir) {
               ph_pack.species[blob].care.sleep_min == ph_pack.species[blob].care.wake_min,
           "baker: care columns (hunger, hearts, never sleeps) reach the pack");
 
+    // A rule that an earlier, easier rule always beats is reported.
+    fs::remove_all("build/test_packs/shadow_src");
+    fs::copy("tools/baker/sample", "build/test_packs/shadow_src", fs::copy_options::recursive);
+    std::ofstream("build/test_packs/shadow_src/evolutions.csv", std::ios::app) << "sample_blob,sample_fang,2,,,,\n";
+    vpet::BakeReport sh;
+    vpet::bake_pack("build/test_packs/shadow_src", "build/test_packs/shadow_out", sh);
+    bool shadow_warned = false;
+    for (const std::string& w : sh.warnings) shadow_warned |= w.find("can never happen") != std::string::npos;
+    check(shadow_warned, "baker: warns about evolution rules an earlier rule always beats");
+
     // Broken input is reported, not silently accepted.
     write_file("build/test_packs/broken_src/species.csv",
                "id,name,stage,sprite\nbad1,Bad,notastage,sprites/x.png\nbad2,Bad,egg,sprites/missing.png\n");
@@ -260,12 +271,17 @@ void evolution_checks(FakePlatform& p, const std::string& demo_dir) {
           "meeting level and floor unlocks the adult form");
 
     vpet::Stage legacy;
-    check(vpet::parse_stage("baby", legacy) && legacy == vpet::Stage::Infant && vpet::kStageCount == 6,
-          "6 stages; old 'baby' packs still load as infant");
+    vpet::Stage infant, sup;
+    check(vpet::parse_stage("baby", legacy) && legacy == vpet::Stage::Baby1 && vpet::parse_stage("infant", infant) &&
+              infant == vpet::Stage::Baby1 && vpet::parse_stage("super_ultimate", sup) &&
+              sup == vpet::Stage::SuperUltimate && vpet::kStageCount == 8,
+          "8 stages; older 'baby'/'infant' packs load as baby1");
+    check(std::string(vpet::stage_label(vpet::Stage::Baby2)) == "BABY II", "stages have on-screen labels");
 }
 
 // Creatures as tiered quest enemies, family drop tables, boss floors.
 void enemy_checks(FakePlatform& p, const std::string& demo_dir) {
+    namespace fs = std::filesystem;
     std::printf("tiered enemies and family drops\n");
     vpet::Pack pack;
     std::string err;
@@ -310,6 +326,54 @@ void enemy_checks(FakePlatform& p, const std::string& demo_dir) {
     check(volt && vpet::enemy_stats(*volt, 10, false).hp == 60 && vpet::enemy_stats(*volt, 12, false).hp == 78 &&
               vpet::enemy_stats(*volt, 12, true).hp == 117,
           "enemies scale from the start of their tier; bosses get +50% HP");
+
+    // Default tiers reserve super ultimates for deep floors.
+    bool deep_only = false;
+    for (const vpet::EnemyTier& t : pack.tiers)
+        if (t.stage == vpet::Stage::SuperUltimate) deep_only = t.min_floor >= 40;
+    check(deep_only, "super ultimates only appear from floor 40");
+
+    // Boss floors with no written boss promote the strongest tier in range.
+    vpet::Pack tiers;
+    tiers.moves.push_back({});
+    for (auto [id, lo, hi] : {std::tuple<const char*, int, int>{"low", 30, 49}, {"high", 40, 0}}) {
+        vpet::Enemy e;
+        e.id = id;
+        e.moves = {0};
+        e.min_floor = lo;
+        e.max_floor = hi;
+        tiers.enemies.push_back(e);
+    }
+    bool high_on_40 = true, mixed_on_41 = false;
+    for (uint32_t r = 0; r < 200; ++r) {
+        vpet::EnemyPick b = vpet::pick_enemy(tiers, 40, r * 2654435761u);
+        high_on_40 &= b.boss && tiers.enemies[b.index].id == "high";
+        mixed_on_41 |= tiers.enemies[vpet::pick_enemy(tiers, 41, r * 2654435761u).index].id == "low";
+    }
+    check(high_on_40 && mixed_on_41, "boss floors promote the strongest tier; normal floors mix overlapping tiers");
+
+    // Attribute advantages come from the pack.
+    vpet::Pack attr;
+    attr.attributes = {{"sun", {"moon"}}, {"moon", {"star"}}, {"star", {"sun"}}, {"void", {}}};
+    check(vpet::attribute_mult(attr, "sun", "moon") == 1.25f && vpet::attribute_mult(attr, "moon", "sun") == 0.75f &&
+              vpet::attribute_mult(attr, "void", "sun") == 1.0f && vpet::attribute_mult(attr, "sun", "") == 1.0f &&
+              vpet::attribute_mult(pack, "sun", "moon") == 1.0f,
+          "attributes: 1.25x with the advantage, 0.75x against, neutral otherwise");
+
+    // A typo in an attribute name is a load error, not a silent neutral.
+    std::string text, perr;
+    p.read_file(demo_dir + "/pack.json", text);
+    size_t at = text.find("\"family\": \"plant\",");
+    text.insert(at, "\"attribute\": \"sunn\", ");
+    text.insert(text.find("\"lifespan_days\""), "\"attributes\": { \"sun\": { \"beats\": [] } },\n  ");
+    write_file("build/test_packs/attr_typo/pack.json", text);
+    fs::create_directories("build/test_packs/attr_typo/sprites");
+    for (const auto& f : fs::directory_iterator(demo_dir + "/sprites"))
+        fs::copy_file(f.path(), "build/test_packs/attr_typo/sprites/" + f.path().filename().string(),
+                      fs::copy_options::overwrite_existing);
+    vpet::Pack typo;
+    check(!vpet::load_pack(p, "build/test_packs/attr_typo", typo, perr) && perr.find("sunn") != std::string::npos,
+          "attributes: an unknown attribute name fails the load");
 }
 
 // Cryo storage, lifespan and the Forever Chip, through the real Game object.

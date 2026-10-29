@@ -8,7 +8,8 @@
 namespace vpet {
 
 namespace {
-constexpr const char* kStageNames[] = {"egg", "infant", "child", "adult", "perfect", "ultimate"};
+constexpr const char* kStageNames[] = {"egg", "baby1", "baby2", "child", "adult", "perfect", "ultimate", "super_ultimate"};
+constexpr const char* kStageLabels[] = {"EGG", "BABY I", "BABY II", "CHILD", "ADULT", "PERFECT", "ULTIMATE", "SUPER ULT."};
 constexpr const char* kRarityNames[] = {"common", "uncommon", "rare", "epic"};
 constexpr const char* kGameNames[] = {"timing", "mash", "sequence", "dice"};
 
@@ -134,37 +135,42 @@ bool load_items(const Json& list, bool material, Pack& out, std::string& err) {
 }  // namespace
 
 const char* stage_name(Stage s) { return kStageNames[int(s)]; }
+const char* stage_label(Stage s) { return kStageLabels[int(s)]; }
 const char* rarity_name(Rarity r) { return kRarityNames[int(r)]; }
 const char* minigame_name(MiniGame g) { return kGameNames[int(g)]; }
 
 Care default_care(Stage s) {
     //                 hunger  strength  poop    sleep    wake    weight  hearts
     switch (s) {
-        case Stage::Egg:      return {0, 0, 0, 0, 0, 0, 1};
-        case Stage::Infant:   return {3 * 60, 3 * 60, 3 * 60, 20 * 60, 9 * 60, 5, 1};
-        case Stage::Child:    return {48 * 60, 48 * 60, 120 * 60, 21 * 60, 8 * 60, 20, 2};
-        case Stage::Adult:    return {59 * 60, 59 * 60, 120 * 60, 22 * 60, 8 * 60, 30, 3};
-        case Stage::Perfect:  return {66 * 60, 66 * 60, 120 * 60, 23 * 60, 9 * 60, 40, 4};
-        case Stage::Ultimate: return {75 * 60, 75 * 60, 120 * 60, 23 * 60, 9 * 60, 50, 5};
+        case Stage::Egg:           return {0, 0, 0, 0, 0, 0, 1};
+        case Stage::Baby1:         return {3 * 60, 3 * 60, 3 * 60, 20 * 60, 9 * 60, 5, 1};
+        case Stage::Baby2:         return {30 * 60, 30 * 60, 60 * 60, 20 * 60, 9 * 60, 10, 1};
+        case Stage::Child:         return {48 * 60, 48 * 60, 120 * 60, 21 * 60, 8 * 60, 20, 2};
+        case Stage::Adult:         return {59 * 60, 59 * 60, 120 * 60, 22 * 60, 8 * 60, 30, 3};
+        case Stage::Perfect:       return {66 * 60, 66 * 60, 120 * 60, 23 * 60, 9 * 60, 40, 4};
+        case Stage::Ultimate:      return {75 * 60, 75 * 60, 120 * 60, 23 * 60, 9 * 60, 50, 5};
+        case Stage::SuperUltimate: return {85 * 60, 85 * 60, 150 * 60, 23 * 60, 9 * 60, 60, 5};
     }
     return {};
 }
 
 Stats default_stats(Stage s) {
     switch (s) {
-        case Stage::Egg:      return {1, 1, 1, 1};
-        case Stage::Infant:   return {20, 5, 4, 5};
-        case Stage::Child:    return {45, 12, 9, 9};
-        case Stage::Adult:    return {70, 18, 14, 12};
-        case Stage::Perfect:  return {100, 26, 20, 16};
-        case Stage::Ultimate: return {140, 36, 28, 20};
+        case Stage::Egg:           return {1, 1, 1, 1};
+        case Stage::Baby1:         return {20, 5, 4, 5};
+        case Stage::Baby2:         return {30, 8, 6, 6};
+        case Stage::Child:         return {45, 12, 9, 9};
+        case Stage::Adult:         return {70, 18, 14, 12};
+        case Stage::Perfect:       return {100, 26, 20, 16};
+        case Stage::Ultimate:      return {140, 36, 28, 20};
+        case Stage::SuperUltimate: return {180, 46, 36, 25};
     }
     return {};
 }
 
 bool parse_stage(const std::string& s, Stage& out) {
     int i = index_of(kStageNames, s);
-    if (i < 0 && (s == "baby" || s == "baby2")) i = int(Stage::Infant);  // names from older packs
+    if (i < 0 && (s == "infant" || s == "baby")) i = int(Stage::Baby1);  // names from older packs
     if (i >= 0) out = Stage(i);
     return i >= 0;
 }
@@ -249,6 +255,14 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
         return idx >= 0;
     };
 
+    // "attributes": { "a": { "beats": ["b"] }, ... }
+    const Json& attrs = root["attributes"];
+    for (size_t i = 0; i < attrs.size(); ++i) {
+        std::vector<std::string> beats;
+        for (size_t b = 0; b < attrs[i]["beats"].size(); ++b) beats.push_back(attrs[i]["beats"][b].str_or(""));
+        out.attributes.push_back({attrs.key(i), std::move(beats)});
+    }
+
     // Pass 1: species and sprites. Evolution targets are resolved after,
     // because a rule can point at a species defined later in the file.
     const Json& species = root["species"];
@@ -276,6 +290,7 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
         }
         s.stats = default_stats(s.stage);
         s.family = js["family"].str_or("");
+        s.attribute = js["attribute"].str_or("");
         s.enemy = js["enemy"].bool_or(true);
         read_stats(js["stats"], s.stats);
         const Json& learns = js["learns"];
@@ -353,7 +368,8 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
     // Which creature stages appear on which floors.
     const Json& tiers = root["quest"]["tiers"];
     if (tiers.is_null()) {
-        out.tiers = {{Stage::Child, 1, 9}, {Stage::Adult, 10, 19}, {Stage::Perfect, 20, 29}, {Stage::Ultimate, 30, 0}};
+        out.tiers = {{Stage::Child, 1, 9},     {Stage::Adult, 10, 19},    {Stage::Perfect, 20, 29},
+                     {Stage::Ultimate, 30, 49}, {Stage::SuperUltimate, 40, 0}};
     } else {
         for (size_t i = 0; i < tiers.size(); ++i) {
             EnemyTier tier;
@@ -374,10 +390,11 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
         e.id = je["id"].str_or("");
         e.name = je["name"].str_or(e.id);
         e.family = je["family"].str_or("");
+        e.attribute = je["attribute"].str_or("");
         e.boss = je["boss"].bool_or(false);
         e.min_floor = je["min_floor"].int_or(1);
         e.max_floor = je["max_floor"].int_or(0);
-        e.stats = default_stats(Stage::Infant);
+        e.stats = default_stats(Stage::Baby1);
         read_stats(je["stats"], e.stats);
         for (size_t m = 0; m < je["moves"].size(); ++m) {
             int idx;
@@ -408,6 +425,7 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
                 e.name = sp.name;
                 for (char& c : e.name) c = char(toupper(static_cast<unsigned char>(c)));
                 e.family = sp.family;
+                e.attribute = sp.attribute;
                 e.sprite = sp.sprite;
                 e.stats = sp.stats;
                 e.species = int(s);
@@ -461,6 +479,23 @@ bool load_pack(Platform& platform, const std::string& dir, Pack& out, std::strin
     }
 
     if (!amounts(root["start_items"], "start_items", out.start_items)) return false;
+
+    // Attribute names must be ones the pack defines (when it defines any).
+    if (!out.attributes.empty()) {
+        auto known = [&](const std::string& a) {
+            if (a.empty()) return true;
+            for (const auto& [name, beats] : out.attributes)
+                if (name == a) return true;
+            return false;
+        };
+        for (const auto& [name, beats] : out.attributes)
+            for (const std::string& b : beats)
+                if (!known(b)) return err = "attribute " + name + " beats unknown attribute '" + b + "'", false;
+        for (const Species& s : out.species)
+            if (!known(s.attribute)) return err = s.id + ": unknown attribute '" + s.attribute + "'", false;
+        for (const Enemy& e : out.enemies)
+            if (!known(e.attribute)) return err = e.id + ": unknown attribute '" + e.attribute + "'", false;
+    }
     out.lifespan_s = uint32_t(root["lifespan_days"].num_or(0) * 86400.0);
 
     if (out.rosters.empty() || out.rosters[0].eggs.empty()) {

@@ -281,6 +281,8 @@ bool bake_pack(const std::string& in_dir, const std::string& out_dir, BakeReport
                         ",\n      \"stage\": " + quote(stage) + ",\n      \"sprite\": " + quote(rel);
         std::string family = species.get(row, "family");
         if (!family.empty()) o += ",\n      \"family\": " + quote(family);
+        std::string attribute = species.get(row, "attribute");
+        if (!attribute.empty()) o += ",\n      \"attribute\": " + quote(attribute);
 
         std::string stats;
         for (const char* stat : {"hp", "atk", "def", "spd"}) {
@@ -351,6 +353,35 @@ bool bake_pack(const std::string& in_dir, const std::string& out_dir, BakeReport
         else if (stage_of.count(from) && stage_of[to] < stage_of[from])
             r.warnings.push_back(evolutions.where(e) + ": " + to + " is an earlier stage than " + from);
     }
+    // A rule can never fire if an earlier rule for the same creature is at
+    // least as easy on every condition: the earlier one always wins first.
+    struct Cond {
+        double hours, mistakes, level, effort, floor;
+    };
+    auto cond = [&](size_t e) {
+        auto num = [&](const char* k, double blank) {
+            std::string c = evolutions.get(e, k);
+            return c.empty() ? blank : std::strtod(c.c_str(), nullptr);
+        };
+        return Cond{num("hours_in_stage", 0), num("max_care_mistakes", 1e9), num("min_level", 0), num("min_effort", 0),
+                    num("min_quest_floor", 0)};
+    };
+    for (size_t j = 0; have_evolutions && j < evolutions.rows.size(); ++j) {
+        Cond b = cond(j);
+        for (size_t i = 0; i < j; ++i) {
+            if (evolutions.get(i, "from") != evolutions.get(j, "from")) continue;
+            Cond a = cond(i);
+            if (a.hours <= b.hours && a.mistakes >= b.mistakes && a.level <= b.level && a.effort <= b.effort &&
+                a.floor <= b.floor) {
+                r.warnings.push_back(evolutions.where(j) + ": " + evolutions.get(j, "from") + " -> " +
+                                     evolutions.get(j, "to") + " can never happen; the earlier rule to " +
+                                     evolutions.get(i, "to") + " (" + evolutions.where(i) +
+                                     ") always matches first");
+                break;
+            }
+        }
+    }
+
     // Creatures nothing evolves into (and that aren't eggs) can never be raised.
     std::set<std::string> reachable(eggs.begin(), eggs.end());
     for (size_t e = 0; have_evolutions && e < evolutions.rows.size(); ++e) reachable.insert(evolutions.get(e, "to"));
