@@ -397,15 +397,18 @@ void QuestScene::draw(Framebuffer& fb) {
     if (fighting && ehp_ > 0) {
         const Enemy& e = pack.enemies[enemy_];
         fb.draw_sprite(e.sprite, 0, 80, kArenaTop + 10 + bob, 2);
-        fb.panel(3, 15, 54, 14, mix(t.ui, t.bg_top, 40), mix(t.ui, t.ui_text, 70));
-        fb.draw_text(5, 17, e.name, boss_ ? t.accent : t.ui_text);
+        // The panel grows to fit long names, stopping short of the enemy sprite.
+        std::string name = e.name.substr(0, 18);
+        int inner = std::max(50, Framebuffer::text_width(name));
+        fb.panel(3, 15, inner + 4, 14, mix(t.ui, t.bg_top, 40), mix(t.ui, t.ui_text, 70));
+        fb.draw_text(5, 17, name, boss_ ? t.accent : t.ui_text);
         if (!e.attribute.empty()) {  // 3-letter attribute tag, right-aligned, when it fits
             std::string tag = e.attribute.substr(0, 3);
             for (char& c : tag) c = char(toupper(static_cast<unsigned char>(c)));
-            if (Framebuffer::text_width(e.name) + Framebuffer::text_width(tag) + 3 <= 50)
-                fb.draw_text(55 - Framebuffer::text_width(tag), 17, tag, dim);
+            if (Framebuffer::text_width(name) + Framebuffer::text_width(tag) + 3 <= inner)
+                fb.draw_text(5 + inner - Framebuffer::text_width(tag), 17, tag, dim);
         }
-        draw_bar(fb, 5, 24, 50, 3, ehp_, es_.hp, rgb(0xe0, 0x40, 0x50), dim);
+        draw_bar(fb, 5, 24, inner, 3, ehp_, es_.hp, rgb(0xe0, 0x40, 0x50), dim);
     }
 
     int pet_x = phase_ == Phase::Lobby ? (kScreenW - 32) / 2 : 12;
@@ -444,14 +447,17 @@ void QuestScene::draw(Framebuffer& fb) {
         }
         case Phase::Choose: {
             int n = int(moves_.size()) + 1;
+            // Two columns of 59px: icon, then up to 12 letters, all inside the
+            // highlight box (longer names are cut).
+            constexpr int kColW = 59, kMaxChars = 12;
             for (int i = 0; i < n; ++i) {
-                int ox = 3 + (i % 2) * 58, oy = y + (i / 2) * 11;
+                int ox = 1 + (i % 2) * kColW, oy = y + (i / 2) * 11;
                 bool item = i >= int(moves_.size());
-                std::string label = item ? "ITEM" : pack.moves[moves_[i]].name;
+                std::string label = item ? "ITEM" : pack.moves[moves_[i]].name.substr(0, kMaxChars);
                 bool sel = i == cursor_;
-                if (sel) fb.panel(ox - 1, oy - 3, 57, 11, mix(t.ui, t.accent, 60), t.accent);
+                if (sel) fb.panel(ox, oy - 3, kColW, 11, mix(t.ui, t.accent, 60), t.accent);
                 fb.draw_sprite(icons().ui, item ? kUiItem : move_icon(pack.moves[moves_[i]].game), ox + 1, oy - 2);
-                fb.draw_text(ox + 11, oy, label, sel ? t.accent : t.ui_text);
+                fb.draw_text(ox + 10, oy, label, sel ? t.accent : t.ui_text);
             }
             std::string info = cursor_ < int(moves_.size())
                                    ? std::string(minigame_name(pack.moves[moves_[cursor_]].game)) + "  POWER " +
