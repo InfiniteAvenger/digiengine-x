@@ -112,8 +112,8 @@ Two lists sharing one id space. Materials are ingredients only; items are used.
 
 ```json
 "materials": [ { "id": "berry", "name": "BERRY", "rarity": "common", "info": "SWEET GARDEN BERRY." } ],
-"items":     [ { "id": "patch", "name": "PATCH", "rarity": "common", "info": "HEALS 30% HP.",
-                 "effect": { "heal": 30 } } ]
+"items":     [ { "id": "patch", "name": "PATCH", "rarity": "common", "info": "HEALS 50% HP.",
+                 "effect": { "heal": 50 } } ]
 ```
 
 `rarity`: `common`, `uncommon`, `rare`, `epic`. `icon` is a frame number in

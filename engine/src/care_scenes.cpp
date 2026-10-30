@@ -296,8 +296,9 @@ public:
         for (int i = 0; i < kCount; ++i) {
             int y = 22 + i * 12;
             if (i == cursor_) fb.panel(4, y - 3, kScreenW - 8, 11, mix(t.ui, t.accent, 60), t.accent);
-            if (i == cursor_) fb.draw_text(7, y, ">", t.accent);
-            fb.draw_text(12, y, kNames[i], i == cursor_ ? t.accent : t.ui_text);
+            if (i == 0) fb.draw_sprite(icons().kibble, 0, 7, y - 2);
+            else fb.draw_sprite(icons().ui, kUiMedicine, 7, y - 2);
+            fb.draw_text(18, y, kNames[i], i == cursor_ ? t.accent : t.ui_text);
         }
         fb.draw_text_centered(50, kInfo[cursor_], mix(t.ui_text, t.ui, 40));
         draw_card(fb, t, 2, 63, kScreenW - 4, 28);

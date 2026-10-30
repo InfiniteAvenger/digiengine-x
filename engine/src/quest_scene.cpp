@@ -445,18 +445,20 @@ void QuestScene::draw(Framebuffer& fb) {
         case Phase::Choose: {
             int n = int(moves_.size()) + 1;
             for (int i = 0; i < n; ++i) {
-                int ox = 6 + (i % 2) * 57, oy = y + (i / 2) * 10;
-                std::string label = i < int(moves_.size()) ? pack.moves[moves_[i]].name : "ITEM";
+                int ox = 3 + (i % 2) * 58, oy = y + (i / 2) * 11;
+                bool item = i >= int(moves_.size());
+                std::string label = item ? "ITEM" : pack.moves[moves_[i]].name;
                 bool sel = i == cursor_;
-                if (sel) fb.draw_text(ox - 4, oy, ">", t.accent);
-                fb.draw_text(ox, oy, label, sel ? t.accent : t.ui_text);
+                if (sel) fb.panel(ox - 1, oy - 3, 57, 11, mix(t.ui, t.accent, 60), t.accent);
+                fb.draw_sprite(icons().ui, item ? kUiItem : move_icon(pack.moves[moves_[i]].game), ox + 1, oy - 2);
+                fb.draw_text(ox + 11, oy, label, sel ? t.accent : t.ui_text);
             }
             std::string info = cursor_ < int(moves_.size())
                                    ? std::string(minigame_name(pack.moves[moves_[cursor_]].game)) + "  POWER " +
                                          std::to_string(pack.moves[moves_[cursor_]].power)
                                    : "HEAL OR BUFF";
             for (char& c : info) c = char(toupper(c));
-            fb.draw_text(6, kScreenH - 9, info, dim);
+            fb.draw_text(6, kScreenH - 9, info, mix(t.ui, t.ui_text, 130));
             break;
         }
         case Phase::Items:

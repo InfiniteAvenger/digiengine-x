@@ -280,6 +280,75 @@ mrrrrrrrm
 .wwnnwwg.
 )";
 
+// Menu row icons, 8x8 solid shapes that read on dark panels: medicine, the
+// battle menu's move kinds (timing, mash, sequence, dice) and items (a potion).
+constexpr const char* kUi = R"(size 8 8
+palette
+k 1a1c2c
+w f4f4f4
+g 94b0c2
+r e04050
+m b13e53
+y ffcd75
+a d9a066
+b 41a6f6
+c 73eff7
+frame
+........
+.rrrwww.
+rwrrwwww
+rrrrwwww
+mrrrwwwg
+.mmmggg.
+........
+........
+frame
+..rrrr..
+.rrwwrr.
+rrwwwwrr
+rwwrrwwr
+rwwrrwwr
+rrwwwwrr
+.rrwwrr.
+..rrrr..
+frame
+...yyyy.
+..yyyy..
+.yyyy...
+yyyyyyy.
+...yyya.
+..yyya..
+.yya....
+.ya.....
+frame
+........
+bb..bb..
+.bb..bb.
+..cc..cc
+..bb..bb
+.bb..bb.
+bb..bb..
+........
+frame
+.wwwwww.
+wkwwwwwg
+wwwwwwwg
+wwwkwwwg
+wwwwwwwg
+wwwwwkwg
+.gggggg.
+........
+frame
+..gggg..
+...ww...
+...ww...
+..wbbw..
+.wbbbbw.
+.wbcbbw.
+.wbbbbw.
+..wwww..
+)";
+
 // Forever Partner badge: a small infinity sign.
 constexpr const char* kForever = R"(size 9 5
 palette
@@ -296,7 +365,7 @@ y..y.y..y
 
 const Icons& icons() {
     static const Icons i{load(kPoop), load(kHeart),  load(kAttention), load(kSick),
-                         load(kMenu), load(kKibble), load(kForever), load(kNodes)};
+                         load(kMenu), load(kKibble), load(kForever), load(kNodes), load(kUi)};
     return i;
 }
 
