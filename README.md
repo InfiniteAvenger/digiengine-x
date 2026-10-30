@@ -35,6 +35,16 @@ cmake --build build
 ./build/vpet.exe
 ```
 
+To get a copy that runs anywhere (double-click, no MSYS2 needed):
+
+```bash
+cmake --build build --target package
+```
+
+This makes `build/DigiEngineX/` (with `DigiEngineX.exe`, its DLLs and every
+pack) and `build/DigiEngineX.zip`. For a zip to share, ship only the demo
+pack: `cmake -S . -B build -DVPET_DIST_PACKS=demo` first.
+
 ## Controls (desktop)
 
 | Button | Keys            | Home screen                  |

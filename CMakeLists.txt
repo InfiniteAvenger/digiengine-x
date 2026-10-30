@@ -78,4 +78,26 @@ if(VPET_BUILD_SDL)
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/packs $<TARGET_FILE_DIR:vpet>/packs
         COMMENT "Copying packs next to the game")
     add_dependencies(copy_packs vpet)
+
+    # A portable folder and zip to run without the build tools:
+    # build/DigiEngineX/DigiEngineX.exe. MinGW's libstdc++ still imports the
+    # pthread DLL, so it goes in too.
+    set(VPET_DIST_PACKS "" CACHE STRING "Packs to put in the portable zip, comma-separated (empty = all)")
+    set(dist_dlls "$<JOIN:$<TARGET_RUNTIME_DLLS:vpet>,|>")  # "|"-separated: a ";" list would split the argument
+    if(MINGW)
+        get_filename_component(mingw_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
+        find_file(VPET_WINPTHREAD_DLL libwinpthread-1.dll HINTS "${mingw_bin}" NO_DEFAULT_PATH)
+        if(VPET_WINPTHREAD_DLL)
+            string(APPEND dist_dlls "|${VPET_WINPTHREAD_DLL}")
+            add_custom_command(TARGET vpet POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different "${VPET_WINPTHREAD_DLL}" $<TARGET_FILE_DIR:vpet>)
+        endif()
+    endif()
+    add_custom_target(package
+        COMMAND ${CMAKE_COMMAND} "-DEXE=$<TARGET_FILE:vpet>" "-DDLLS=${dist_dlls}"
+                "-DPACKS_DIR=${CMAKE_SOURCE_DIR}/packs" "-DOUT=${CMAKE_BINARY_DIR}/DigiEngineX"
+                "-DONLY=${VPET_DIST_PACKS}" -P ${CMAKE_SOURCE_DIR}/tools/package_windows.cmake
+        DEPENDS vpet
+        COMMENT "Packaging DigiEngineX for Windows"
+        VERBATIM)
 endif()
