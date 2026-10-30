@@ -13,9 +13,11 @@ Targets: Windows / Linux PC, Android, and ESP32-S3 handheld hardware.
 engine/          Portable C++17 game core (no platform code, no OS calls)
   include/vpet/  Public headers
   src/           Implementation
-platform/sdl/    Desktop (and later Android) frontend using SDL2
-platform/esp32/  ESP32-S3 frontend (not started)
-tools/baker/     Pack baker: JSON+PNG -> compact binary for ESP32 (not started)
+platform/sdl/    PC and Android frontend using SDL2
+platform/shell/  The handheld frame with touch buttons (Android)
+platform/android/ Android app (Gradle + SDL2); see its README to build the APK
+platform/esp32/  ESP32-S3 frontend (Waveshare ESP32-S3-LCD-1.69)
+tools/baker/     Pack baker: CSV tables + sprites -> pack folder
 packs/demo/      Original CC0 demo pack
 docs/            Design doc and pack format reference
 ```

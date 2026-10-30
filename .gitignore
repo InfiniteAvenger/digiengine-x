@@ -22,3 +22,8 @@ saves/
 *.swp
 Thumbs.db
 .DS_Store
+
+# Android build output and machine-specific paths
+platform/android/.gradle/
+platform/android/local.properties
+platform/android/app/.cxx/

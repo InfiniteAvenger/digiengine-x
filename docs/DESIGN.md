@@ -119,7 +119,7 @@ ESP32 reads straight from flash.
 | 4     | Evolution conditions, cold storage, Forever Partner item       | **done** |
 | 5     | Infinite quest floors, moves, 4 attack minigames               | **done** |
 | 6     | Ecological drops, garden, cooking, crafting                    | **done** |
-| 7     | Android build, local link PvP, then online PvP                 |          |
+| 7     | Android build (done), local link PvP, then online PvP          | partly   |
 
 ## Open decisions
 
