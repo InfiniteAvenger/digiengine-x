@@ -12,6 +12,13 @@ phone only, not for sharing), with a generated `packs/index.txt` listing
 them, since files inside an APK can't be listed at runtime. Saves go to the
 app's private storage.
 
+The app also loads packs from a folder on the phone:
+`Android/data/io.github.vpet/files/packs/` (it appears after the first
+launch). Plug the phone into a PC, choose **File transfer**, and copy a pack
+folder (the one holding `pack.json`) in there; then pick it from settings
+(hold A+C). Newer Android versions hide `Android/data` from the phone's own
+Files app, but a PC can still open it.
+
 ## What you need
 
 - JDK 17 (for example `winget install Microsoft.OpenJDK.17`)
@@ -33,6 +40,12 @@ From `platform/android/` with `JAVA_HOME` set to the JDK:
 
 ```
 gradlew assembleRelease
+```
+
+To bundle only some packs (a public release ships only the demo):
+
+```
+gradlew assembleRelease -Ppacks=demo
 ```
 
 The APK is `app/build/outputs/apk/release/app-release.apk`. It is signed

@@ -998,6 +998,13 @@ int main(int argc, char* argv[]) {
     vpet::Pet before = pet();
     game->save();
     game = std::make_unique<vpet::Game>(p);
+    {
+        // Android looks in two places (the APK and a phone folder); a missing
+        // or empty one is skipped.
+        vpet::Game two(p);
+        check(two.init(std::vector<std::string>{"no/such/folder", argv[1]}) && two.pack_names().size() == 1,
+              "packs: a missing folder is skipped and the next one still loads");
+    }
     game->init(argv[1]);
     check(pet().care_mistakes == before.care_mistakes && pet().weight == before.weight, "save round-trips");
     skip(11ull * 3600 * 1000);  // 08:01

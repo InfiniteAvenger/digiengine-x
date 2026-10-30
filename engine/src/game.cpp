@@ -14,22 +14,25 @@ constexpr uint64_t kToastMs = 1500;
 constexpr uint64_t kFlashMs = 900;
 }
 
-bool Game::init(const std::string& root) {
+bool Game::init(const std::vector<std::string>& roots) {
     now_ = platform_.now_ms();
     rng_ ^= uint32_t(now_) | 1;
 
-    // One pack, or a folder of packs.
+    // Each root is one pack, or a folder of packs.
     std::string text;
     pack_dirs_.clear();
     pack_names_.clear();
-    if (platform_.read_file(root + "/pack.json", text)) {
-        pack_dirs_.push_back(root);
-    } else {
-        for (const std::string& name : platform_.list_dirs(root))
-            if (platform_.read_file(root + "/" + name + "/pack.json", text)) pack_dirs_.push_back(root + "/" + name);
+    for (const std::string& root : roots) {
+        if (platform_.read_file(root + "/pack.json", text)) {
+            pack_dirs_.push_back(root);
+        } else {
+            for (const std::string& name : platform_.list_dirs(root))
+                if (platform_.read_file(root + "/" + name + "/pack.json", text))
+                    pack_dirs_.push_back(root + "/" + name);
+        }
     }
     if (pack_dirs_.empty()) {
-        error_ = "no packs found in " + root;
+        error_ = "no packs found in " + (roots.empty() ? std::string("(nothing)") : roots.front());
         return false;
     }
     for (const std::string& dir : pack_dirs_) {

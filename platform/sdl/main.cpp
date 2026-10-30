@@ -199,15 +199,26 @@ int main(int argc, char* argv[]) {
     SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING,
                                              kViewW, kViewH);
 
-    std::string pack_dir;
+    std::vector<std::string> pack_dirs;
     if (argc > 1) {
-        pack_dir = argv[1];
+        pack_dirs.push_back(argv[1]);
     } else {
         // Next to the executable on PC; on Android SDL has no base path and
         // relative paths read the APK's assets.
         char* base = SDL_GetBasePath();
-        pack_dir = std::string(base ? base : "") + "packs";  // every installed pack
+        pack_dirs.push_back(std::string(base ? base : "") + "packs");  // every installed pack
         SDL_free(base);
+#ifdef __ANDROID__
+        // Packs the player copies onto the phone, in
+        // Android/data/io.github.vpet/files/packs/ (made here so it shows up
+        // when the phone is plugged into a PC).
+        if (const char* ext = SDL_AndroidGetExternalStoragePath()) {
+            std::string dir = std::string(ext) + "/packs";
+            std::error_code ec;
+            std::filesystem::create_directories(dir, ec);
+            pack_dirs.push_back(dir);
+        }
+#endif
     }
 
     // Per-user data folder, e.g. %APPDATA%\vpet\vpet\ on Windows, app storage on Android.
@@ -228,7 +239,7 @@ int main(int argc, char* argv[]) {
     SDL_AudioDeviceID audio = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
     if (audio) SDL_PauseAudioDevice(audio, 0);
     vpet::Game game(platform);
-    if (!game.init(pack_dir)) SDL_Log("failed to load pack from %s", pack_dir.c_str());
+    if (!game.init(pack_dirs)) SDL_Log("failed to load packs from %s", pack_dirs.front().c_str());
 
     bool running = true;
     while (running) {

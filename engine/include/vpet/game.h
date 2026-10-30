@@ -33,7 +33,10 @@ public:
     // `root` is either one pack folder (with pack.json) or a folder of pack
     // folders. Opens the last-used pack and starts the home screen. On failure
     // the error is shown on screen by frame().
-    bool init(const std::string& root);
+    bool init(const std::string& root) { return init(std::vector<std::string>{root}); }
+    // Several such roots, searched in order (Android: the APK, then a folder
+    // on the phone the player can copy packs into).
+    bool init(const std::vector<std::string>& roots);
 
     // Installed packs (folder paths and display names) and the open one.
     const std::vector<std::string>& pack_names() const { return pack_names_; }

@@ -48,15 +48,20 @@ android {
 
 // Copies every pack in the repo's packs/ folder (including local ones) into
 // the APK, plus packs/index.txt naming them, since APK assets can't be listed.
+// -Ppacks=demo (comma-separated) bundles only those, e.g. for a public release.
 def packsDir = file('../../../packs')
 def assetsOut = file("$buildDir/generated/vpet-assets")
+def onlyPacks = project.findProperty('packs')?.toString()?.split(',')*.trim()
 tasks.register('bundlePacks') {
     inputs.dir packsDir
+    inputs.property 'packs', onlyPacks ?: []
     outputs.dir assetsOut
     doLast {
         delete assetsOut
         // Only real packs (folders with a pack.json); source folders stay out.
         def names = packsDir.listFiles().findAll { it.isDirectory() && new File(it, 'pack.json').exists() }*.name.sort()
+        if (onlyPacks) names = names.findAll { it in onlyPacks }
+        if (names.isEmpty()) throw new GradleException("no packs to bundle (packs=$onlyPacks)")
         names.each { name ->
             copy {
                 from new File(packsDir, name)
