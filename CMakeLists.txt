@@ -27,6 +27,7 @@ add_library(vpet_engine STATIC
     engine/src/scenery.cpp
     engine/src/settings_scene.cpp
     engine/src/sprite.cpp
+    engine/src/welcome_scene.cpp
 )
 target_include_directories(vpet_engine PUBLIC engine/include)
 if(NOT MSVC)

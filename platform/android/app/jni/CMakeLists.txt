@@ -12,7 +12,7 @@ endif()
 add_subdirectory(${SDL2_SOURCE_DIR} ${CMAKE_BINARY_DIR}/SDL2)
 
 set(VPET_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../../..)
-file(GLOB VPET_ENGINE_SOURCES ${VPET_ROOT}/engine/src/*.cpp)
+file(GLOB VPET_ENGINE_SOURCES CONFIGURE_DEPENDS ${VPET_ROOT}/engine/src/*.cpp)
 
 # SDLActivity loads "main" and calls SDL_main (SDL.h renames main()).
 add_library(main SHARED

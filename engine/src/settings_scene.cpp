@@ -104,6 +104,53 @@ private:
     int field_ = 0;  // 0 hours, 1 minutes
 };
 
+// Shell colors: pick a part, then a color. B applies at once so the shell
+// around the screen shows it; the list stays open to try others.
+std::unique_ptr<Scene> make_color_picker(Game& g, int part) {
+    static const char* const kTitles[] = {"BODY", "FACEPLATE", "BUTTONS"};
+    auto slot = [part](ShellStyle& s) -> uint8_t& { return part == 0 ? s.body : part == 1 ? s.trim : s.buttons; };
+    auto rows = [&g, slot] {
+        ShellStyle s = g.shell_style();
+        std::vector<Row> out;
+        for (int i = 0; i < kShellColorCount; ++i) {
+            const NamedColor& c = kShellColors[i];
+            // Very dark colors would vanish on the dark list; lift them a little.
+            Color shown = mix(rgb(c.r, c.g, c.b), rgb(0xff, 0xff, 0xff), c.r + c.g + c.b < 200 ? 90 : 0);
+            out.push_back({c.name, slot(s) == i ? "ON" : "", shown});
+        }
+        return out;
+    };
+    auto detail = [](int) { return std::string("B: USE THIS COLOR. C: DONE"); };
+    auto pick = [&g, slot](int row) {
+        ShellStyle s = g.shell_style();
+        slot(s) = uint8_t(row);
+        g.set_shell_style(s);
+    };
+    return std::make_unique<ListScene>(g, kTitles[part], rows, detail, pick, "", true);
+}
+
+std::unique_ptr<Scene> make_shell_menu(Game& g) {
+    auto rows = [&g] {
+        const ShellStyle& s = g.shell_style();
+        Color c = g.pack().theme.ui_text;
+        return std::vector<Row>{{"BODY", kShellColors[s.body].name, c},
+                                {"FACEPLATE", kShellColors[s.trim].name, c},
+                                {"BUTTONS", kShellColors[s.buttons].name, c},
+                                {"RESET", "", c}};
+    };
+    auto detail = [](int row) {
+        static const char* const kInfo[] = {"THE MAIN SHELL", "THE KEYHOLE PLATE AROUND THE SCREEN",
+                                            "THE A, B AND C BUTTONS", "BACK TO MINT, BLACK AND CORAL"};
+        return std::string(kInfo[row]);
+    };
+    auto pick = [&g](int row) {
+        if (row < 3) return g.push(make_color_picker(g, row));
+        g.set_shell_style(ShellStyle{});
+        g.toast("SHELL RESET");
+    };
+    return std::make_unique<ListScene>(g, "SHELL", rows, detail, pick, "", true);
+}
+
 // Debug: a list of forms to jump to (next forms or earlier ones).
 std::unique_ptr<Scene> make_form_picker(Game& g, bool forward) {
     auto forms = [&g, forward] {
@@ -256,7 +303,15 @@ std::unique_ptr<Scene> make_moves_scene(Game& g) {
 
 std::unique_ptr<Scene> make_settings_scene(Game& game) {
     Game* g = &game;
-    auto rows = [g] {
+    enum Id { kPack, kVersion, kMoves, kSound, kClock, kShell, kDebug, kAbout };
+    // The SHELL row only exists where the platform draws a shell.
+    auto ids = [g] {
+        std::vector<Id> out = {kPack, kVersion, kMoves, kSound, kClock};
+        if (g->has_shell()) out.push_back(kShell);
+        out.insert(out.end(), {kDebug, kAbout});
+        return out;
+    };
+    auto rows = [g, ids] {
         const Pack& p = g->pack();
         Color c = p.theme.ui_text;
         std::string pack = g->pack_names()[size_t(g->pack_index())], version = p.rosters[size_t(g->roster_index())].name;
@@ -265,38 +320,51 @@ std::unique_ptr<Scene> make_settings_scene(Game& game) {
         char clock[6];
         int m = g->local_minute();
         std::snprintf(clock, sizeof clock, "%02d:%02d", m / 60, m % 60);
-        return std::vector<Row>{{"PACK", pack, c},  {"VERSION", version, c}, {"MOVES", "", c},
-                                {"SOUND", g->sound_on() ? "ON" : "OFF", c}, {"CLOCK", clock, c}, {"DEBUG", "", c},
-                                {"ABOUT", "", c}};
+        std::vector<Row> out;
+        for (Id id : ids()) {
+            switch (id) {
+                case kPack: out.push_back({"PACK", pack, c}); break;
+                case kVersion: out.push_back({"VERSION", version, c}); break;
+                case kMoves: out.push_back({"MOVES", "", c}); break;
+                case kSound: out.push_back({"SOUND", g->sound_on() ? "ON" : "OFF", c}); break;
+                case kClock: out.push_back({"CLOCK", clock, c}); break;
+                case kShell: out.push_back({"SHELL", "", c}); break;
+                case kDebug: out.push_back({"DEBUG", "", c}); break;
+                case kAbout: out.push_back({"ABOUT", "", c}); break;
+            }
+        }
+        return out;
     };
-    auto detail = [g](int row) {
-        switch (row) {
-            case 0: return std::string(g->pack_names().size() > 1 ? "SWITCH TO ANOTHER INSTALLED PACK" : "ONLY ONE PACK INSTALLED");
-            case 1: return std::string(g->pack().rosters.size() > 1 ? "B: NEXT VERSION. USED FOR NEW EGGS" : "THIS PACK HAS ONE VERSION");
-            case 2: return std::string("CHOOSE YOUR 3 EQUIPPED MOVES");
-            case 3: return std::string("B: TURN BEEPS AND JINGLES ON OR OFF");
-            case 4: return std::string("SET THE TIME OF DAY (BEDTIMES, SKY)");
-            case 5: return std::string("TEST TOOLS: EVOLVE, WAKE, FILL...");
+    auto detail = [g, ids](int row) {
+        switch (ids()[size_t(row)]) {
+            case kPack: return std::string(g->pack_names().size() > 1 ? "SWITCH TO ANOTHER INSTALLED PACK" : "ONLY ONE PACK INSTALLED");
+            case kVersion: return std::string(g->pack().rosters.size() > 1 ? "B: NEXT VERSION. USED FOR NEW EGGS" : "THIS PACK HAS ONE VERSION");
+            case kMoves: return std::string("CHOOSE YOUR 3 EQUIPPED MOVES");
+            case kSound: return std::string("B: TURN BEEPS AND JINGLES ON OR OFF");
+            case kClock: return std::string("SET THE TIME OF DAY (BEDTIMES, SKY)");
+            case kShell: return std::string("COLORS OF THE BODY, FACEPLATE AND BUTTONS");
+            case kDebug: return std::string("TEST TOOLS: EVOLVE, WAKE, FILL...");
             default: return std::string("PACK DETAILS");
         }
     };
-    auto pick = [g](int row) {
-        switch (row) {
-            case 0: g->push(make_pack_picker(*g)); break;
-            case 1:
+    auto pick = [g, ids](int row) {
+        switch (ids()[size_t(row)]) {
+            case kPack: g->push(make_pack_picker(*g)); break;
+            case kVersion:
                 g->set_roster(g->roster_index() + 1);
                 g->toast("NEXT EGG: " + g->pack().rosters[size_t(g->roster_index())].name);
                 break;
-            case 2:
+            case kMoves:
                 if (g->species().stage == Stage::Egg) g->toast("STILL AN EGG");
                 else g->push(make_moves_scene(*g));
                 break;
-            case 3:
+            case kSound:
                 g->set_sound(!g->sound_on());
                 g->toast(g->sound_on() ? "SOUND ON" : "SOUND OFF");
                 break;
-            case 4: g->push(std::make_unique<ClockScene>(*g)); break;
-            case 5: g->push(make_debug_scene(*g)); break;
+            case kClock: g->push(std::make_unique<ClockScene>(*g)); break;
+            case kShell: g->push(make_shell_menu(*g)); break;
+            case kDebug: g->push(make_debug_scene(*g)); break;
             default: g->push(make_about(*g)); break;
         }
     };

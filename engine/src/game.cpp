@@ -46,22 +46,27 @@ bool Game::init(const std::vector<std::string>& roots) {
     // Shared settings: the last pack used, sound, and the clock adjustment.
     int choice = 0;
     std::string settings;
-    if (platform_.load_save("settings", settings)) {
-        std::istringstream in(settings);
-        for (std::string line; std::getline(in, line);) {
-            if (line.rfind("pack ", 0) == 0) {
-                for (size_t i = 0; i < pack_dirs_.size(); ++i)
-                    if (pack_dirs_[i] == line.substr(5)) choice = int(i);
-            } else if (line.rfind("sound ", 0) == 0) {
-                sound_on_ = line.substr(6) != "0";
-            } else if (line.rfind("clock_adjust ", 0) == 0) {
-                clock_adjust_s_ = int32_t(std::strtol(line.c_str() + 13, nullptr, 10));
-            }
+    first_launch_ = !platform_.load_save("settings", settings);
+    std::istringstream in(settings);
+    for (std::string line; std::getline(in, line);) {
+        if (line.rfind("pack ", 0) == 0) {
+            for (size_t i = 0; i < pack_dirs_.size(); ++i)
+                if (pack_dirs_[i] == line.substr(5)) choice = int(i);
+        } else if (line.rfind("sound ", 0) == 0) {
+            sound_on_ = line.substr(6) != "0";
+        } else if (line.rfind("clock_adjust ", 0) == 0) {
+            clock_adjust_s_ = int32_t(std::strtol(line.c_str() + 13, nullptr, 10));
+        } else if (line.rfind("shell ", 0) == 0) {
+            std::istringstream s(line.substr(6));
+            int body = -1, trim = -1, buttons = -1;
+            s >> body >> trim >> buttons;
+            auto ok = [](int c) { return c >= 0 && c < kShellColorCount; };
+            if (ok(body) && ok(trim) && ok(buttons)) shell_style_ = {uint8_t(body), uint8_t(trim), uint8_t(buttons)};
         }
     }
-    if (open_pack(choice)) return true;
-    if (choice != 0 && open_pack(0)) return true;  // the last one broke; fall back
-    return false;
+    bool opened = open_pack(choice) || (choice != 0 && open_pack(0));  // the last one broke; fall back
+    if (opened && first_launch_) push(make_welcome_scene(*this));
+    return opened;
 }
 
 bool Game::open_pack(int index) {
@@ -95,7 +100,14 @@ bool Game::open_pack(int index) {
 
 void Game::save_settings() {
     platform_.write_save("settings", "pack " + pack_dirs_[size_t(pack_index_)] + "\nsound " + (sound_on_ ? "1" : "0") +
-                                         "\nclock_adjust " + std::to_string(clock_adjust_s_) + "\n");
+                                         "\nclock_adjust " + std::to_string(clock_adjust_s_) + "\nshell " +
+                                         std::to_string(shell_style_.body) + " " + std::to_string(shell_style_.trim) +
+                                         " " + std::to_string(shell_style_.buttons) + "\n");
+}
+
+void Game::set_shell_style(const ShellStyle& s) {
+    shell_style_ = s;
+    save_settings();
 }
 
 void Game::set_sound(bool on) {

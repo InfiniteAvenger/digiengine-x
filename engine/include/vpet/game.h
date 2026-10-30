@@ -7,6 +7,7 @@
 #include "vpet/pack.h"
 #include "vpet/pet.h"
 #include "vpet/platform.h"
+#include "vpet/shell_style.h"
 
 namespace vpet {
 
@@ -40,6 +41,8 @@ public:
 
     // Installed packs (folder paths and display names) and the open one.
     const std::vector<std::string>& pack_names() const { return pack_names_; }
+    const std::vector<std::string>& pack_dirs() const { return pack_dirs_; }
+    Platform& platform() { return platform_; }
     int pack_index() const { return pack_index_; }
     // Saves, then switches packs at the end of this frame (each pack keeps
     // its own save).
@@ -63,6 +66,14 @@ public:
     // day and night); pet timers run on absolute time and are unaffected.
     void set_local_time(int hour, int minute);
     int32_t clock_adjust_s() const { return clock_adjust_s_; }
+
+    // Colors of the drawn shell, for platforms that have one.
+    bool has_shell() const { return platform_.has_shell(); }
+    const ShellStyle& shell_style() const { return shell_style_; }
+    void set_shell_style(const ShellStyle& s);
+    // True on the very first launch (no settings saved yet): the welcome
+    // screen is shown over home to pick a pack.
+    bool first_launch() const { return first_launch_; }
     // Runs one frame: input, simulation, draw, present. Call 30-60x a second.
     void frame();
     // Writes the pet to its save slot. Also called automatically.
@@ -130,6 +141,8 @@ private:
     void save_settings();
     bool sound_on_ = true;
     int32_t clock_adjust_s_ = 0;
+    ShellStyle shell_style_;
+    bool first_launch_ = false;
 
     // Tone sequencer: the notes playing now and when the current one ends.
     struct Note {

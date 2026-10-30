@@ -2,9 +2,11 @@
 
 The Android app is the same SDL frontend as the PC build
 (`platform/sdl/main.cpp`), built through SDL2's Android port. On Android
-the screen sits inside a drawn handheld shell (`platform/shell/`) with
-three touch buttons to its right; each finger is tracked on its own, so
-two thumbs can hold A+C for settings.
+the screen sits inside a drawn handheld shell (`platform/shell/`) that fills
+the whole display, in portrait or landscape: a keyhole-shaped faceplate
+around the screen and three touch buttons to its right. Each finger is
+tracked on its own, so two thumbs can hold A+C for settings. Settings ->
+SHELL picks the body, faceplate and button colors.
 
 Everything in the repo's `packs/` folder is bundled into the APK at build
 time (your local packs too, so an APK with personal packs is for your own

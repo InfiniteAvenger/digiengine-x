@@ -1,32 +1,62 @@
 #pragma once
-// The handheld shell drawn around the game screen on PC and Android: a
-// rounded body with the screen in a bezel and three round buttons on the
-// right. Pure pixels, no platform calls, so any frontend can use it.
+// The handheld shell drawn around the game screen on Android. It fills the
+// whole window at the window's own resolution: a plastic body with the
+// DIGIENGINE X logo, a keyhole-shaped faceplate in a contrasting color around
+// the screen, and three round buttons to the right. Colors come from the
+// player's ShellStyle. Pure pixels, no platform calls, so any frontend can
+// use it.
 #include <cstdint>
 #include <vector>
 #include "vpet/framebuffer.h"
+#include "vpet/shell_style.h"
 
 namespace vpet {
 
-constexpr int kShellW = 204, kShellH = 152;
-constexpr int kShellScreenX = 20, kShellScreenY = 16;  // where the 120x120 screen sits
+using Argb = uint32_t;  // 0xAARRGGBB
 
 class Shell {
 public:
-    Shell();
+    // Lays the shell out for a w x h pixel window and draws it.
+    void build(int w, int h, const ShellStyle& style);
+    int width() const { return w_; }
+    int height() const { return h_; }
+    const ShellStyle& style() const { return style_; }
 
-    // Composes the shell, the game screen and the buttons (`held` = BTN_*
-    // bits, drawn pressed) into pixels(): kShellW x kShellH, RGB565.
-    void compose(const Framebuffer& fb, uint8_t held);
-    const Color* pixels() const { return px_.data(); }
+    // The body, faceplate and logo, without the buttons; the screen area is
+    // black. w x h, opaque.
+    const std::vector<Argb>& body() const { return body_; }
 
-    // The BTN_* bit of the button at shell pixel (x, y), or 0. Generous, so
+    // Where the 120x120 game screen goes, in window pixels (a square; the
+    // game is scaled up to fill it).
+    int screen_x() const { return screen_x_; }
+    int screen_y() const { return screen_y_; }
+    int screen_size() const { return screen_size_; }
+
+    // Button i (0 = A, 1 = B, 2 = C) as a square sprite with alpha, up or
+    // pressed, and where its top-left corner goes.
+    const std::vector<Argb>& button(int i, bool down) const { return buttons_[i][down ? 1 : 0]; }
+    int button_size() const { return button_size_; }
+    int button_x(int i) const { return button_cx_[i] - button_size_ / 2; }
+    int button_y(int i) const { return button_cy_[i] - button_size_ / 2; }
+    int button_cx(int i) const { return button_cx_[i]; }
+    int button_cy(int i) const { return button_cy_[i]; }
+
+    // The BTN_* bit of the button at window pixel (x, y), or 0. Generous, so
     // thumbs hit easily.
-    static uint8_t button_at(int x, int y);
+    uint8_t button_at(int x, int y) const;
+
+    // Everything in one image (`held` buttons drawn pressed), for screenshots.
+    std::vector<Argb> compose(const Framebuffer& fb, uint8_t held) const;
 
 private:
-    std::vector<Color> body_;  // the static body, drawn once
-    std::vector<Color> px_;
+    int w_ = 0, h_ = 0;
+    ShellStyle style_;
+    std::vector<Argb> body_;
+    int screen_x_ = 0, screen_y_ = 0, screen_size_ = 0;
+    int button_size_ = 0;
+    float button_r_ = 0;
+    int button_cx_[3] = {}, button_cy_[3] = {};
+    std::vector<Argb> buttons_[3][2];
 };
 
 }  // namespace vpet

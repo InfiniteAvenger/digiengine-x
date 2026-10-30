@@ -15,19 +15,21 @@
 
 namespace {
 
+// Android draws the handheld shell full screen; PC shows just the game screen.
 #ifdef __ANDROID__
 constexpr bool kShell = true;
 #else
 constexpr bool kShell = false;
 #endif
-// What the window shows: the whole shell, or just the game screen.
-constexpr int kViewW = kShell ? vpet::kShellW : vpet::kScreenW;
-constexpr int kViewH = kShell ? vpet::kShellH : vpet::kScreenH;
 
 class SdlPlatform : public vpet::Platform {
 public:
-    SdlPlatform(SDL_Renderer* renderer, SDL_Texture* texture, std::string save_dir)
-        : renderer_(renderer), texture_(texture), save_dir_(std::move(save_dir)) {}
+    SdlPlatform(SDL_Renderer* renderer, std::string save_dir) : renderer_(renderer), save_dir_(std::move(save_dir)) {}
+    ~SdlPlatform() override { destroy_textures(); }
+
+    // The shell's colors come from the game's settings.
+    void attach(const vpet::Game* game) { game_ = game; }
+    bool has_shell() const override { return kShell; }
 
     uint64_t now_ms() override {
         using namespace std::chrono;
@@ -52,30 +54,35 @@ public:
         return b;
     }
 
-    // Mouse and fingers on the shell's buttons. Each finger is tracked on its
-    // own, so two thumbs can hold A+C for settings.
+    // Mouse and fingers on the shell's buttons, in the shell's own pixels
+    // (the renderer's output size). Each finger is tracked on its own, so two
+    // thumbs can hold A+C for settings.
     void handle(const SDL_Event& e) {
+        int ow = 0, oh = 0;
+        SDL_GetRendererOutputSize(renderer_, &ow, &oh);
         switch (e.type) {
             case SDL_MOUSEBUTTONDOWN:
-            case SDL_MOUSEMOTION:
+            case SDL_MOUSEMOTION: {
                 if (e.type == SDL_MOUSEMOTION && !(e.motion.state & SDL_BUTTON_LMASK)) break;
                 if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button != SDL_BUTTON_LEFT) break;
-                mouse_ = vpet::Shell::button_at(e.type == SDL_MOUSEMOTION ? e.motion.x : e.button.x,
-                                                e.type == SDL_MOUSEMOTION ? e.motion.y : e.button.y);
+                int ww = 1, wh = 1;  // mouse positions are in window units, which may not be pixels
+                SDL_GetWindowSize(SDL_RenderGetWindow(renderer_), &ww, &wh);
+                int mx = e.type == SDL_MOUSEMOTION ? e.motion.x : e.button.x;
+                int my = e.type == SDL_MOUSEMOTION ? e.motion.y : e.button.y;
+                mouse_ = shell_.button_at(mx * ow / std::max(ww, 1), my * oh / std::max(wh, 1));
                 break;
+            }
             case SDL_MOUSEBUTTONUP:
                 if (e.button.button == SDL_BUTTON_LEFT) mouse_ = 0;
                 break;
             case SDL_FINGERDOWN:
-            case SDL_FINGERMOTION: {
-                int w = 0, h = 0;
-                SDL_GetWindowSize(SDL_GetWindowFromID(e.tfinger.windowID), &w, &h);
-                float lx = 0, ly = 0;
-                SDL_RenderWindowToLogical(renderer_, int(e.tfinger.x * float(w)), int(e.tfinger.y * float(h)), &lx, &ly);
-                fingers_[e.tfinger.fingerId] = vpet::Shell::button_at(int(lx), int(ly));
+            case SDL_FINGERMOTION:  // finger positions are 0-1 across the window
+                fingers_[e.tfinger.fingerId] =
+                    shell_.button_at(int(e.tfinger.x * float(ow)), int(e.tfinger.y * float(oh)));
                 break;
-            }
             case SDL_FINGERUP: fingers_.erase(e.tfinger.fingerId); break;
+            case SDL_RENDER_DEVICE_RESET:  // Android can drop textures while in the background
+            case SDL_RENDER_TARGETS_RESET: destroy_textures(); break;
             default: break;
         }
     }
@@ -104,15 +111,26 @@ public:
     float phase = 0;
 
     void present(const vpet::Framebuffer& fb) override {
-        if (kShell) {
-            shell_.compose(fb, buttons());
-            SDL_UpdateTexture(texture_, nullptr, shell_.pixels(), vpet::kShellW * int(sizeof(vpet::Color)));
-        } else {
-            SDL_UpdateTexture(texture_, nullptr, fb.pixels(), vpet::kScreenW * int(sizeof(vpet::Color)));
+        if (!screen_) {
+            screen_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, vpet::kScreenW,
+                                        vpet::kScreenH);
         }
+        SDL_UpdateTexture(screen_, nullptr, fb.pixels(), vpet::kScreenW * int(sizeof(vpet::Color)));
         SDL_SetRenderDrawColor(renderer_, 0x10, 0x10, 0x14, 0xff);
         SDL_RenderClear(renderer_);
-        SDL_RenderCopy(renderer_, texture_, nullptr, nullptr);
+        if (kShell) {
+            update_shell();
+            SDL_RenderCopy(renderer_, body_, nullptr, nullptr);
+            SDL_Rect dst{shell_.screen_x(), shell_.screen_y(), shell_.screen_size(), shell_.screen_size()};
+            SDL_RenderCopy(renderer_, screen_, nullptr, &dst);
+            uint8_t held = buttons();
+            for (int i = 0; i < 3; ++i) {
+                SDL_Rect b{shell_.button_x(i), shell_.button_y(i), shell_.button_size(), shell_.button_size()};
+                SDL_RenderCopy(renderer_, button_[i][(held >> i) & 1], nullptr, &b);
+            }
+        } else {
+            SDL_RenderCopy(renderer_, screen_, nullptr, nullptr);
+        }
         SDL_RenderPresent(renderer_);
     }
 
@@ -164,9 +182,39 @@ private:
         return b;
     }
 
+    // Redraws the shell when the window size (rotation) or its colors change.
+    void update_shell() {
+        int w = 0, h = 0;
+        SDL_GetRendererOutputSize(renderer_, &w, &h);
+        vpet::ShellStyle style = game_ ? game_->shell_style() : vpet::ShellStyle{};
+        if (body_ && w == shell_.width() && h == shell_.height() && style == shell_.style()) return;
+        shell_.build(w, h, style);
+        auto upload = [this](SDL_Texture*& t, const std::vector<vpet::Argb>& px, int tw, int th) {
+            if (t) SDL_DestroyTexture(t);
+            t = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, tw, th);
+            SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
+            SDL_UpdateTexture(t, nullptr, px.data(), tw * 4);
+        };
+        upload(body_, shell_.body(), w, h);
+        for (int i = 0; i < 3; ++i)
+            for (int down = 0; down < 2; ++down)
+                upload(button_[i][down], shell_.button(i, down), shell_.button_size(), shell_.button_size());
+    }
+
+    void destroy_textures() {
+        for (SDL_Texture** t : {&screen_, &body_})
+            if (*t) SDL_DestroyTexture(*t), *t = nullptr;
+        for (auto& pair : button_)
+            for (SDL_Texture*& t : pair)
+                if (t) SDL_DestroyTexture(t), t = nullptr;
+    }
+
     SDL_Renderer* renderer_;
-    SDL_Texture* texture_;
     std::string save_dir_;
+    const vpet::Game* game_ = nullptr;
+    SDL_Texture* screen_ = nullptr;  // the game's 120x120 screen
+    SDL_Texture* body_ = nullptr;
+    SDL_Texture* button_[3][2] = {};
     vpet::Shell shell_;
     uint8_t mouse_ = 0;
     std::map<SDL_FingerID, uint8_t> fingers_;
@@ -181,23 +229,32 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Start at the largest whole-number scale that fits ~80% of the screen
-    // height, so pixels stay crisp. The window can still be resized freely.
-    int scale = 4;
-    SDL_DisplayMode mode;
-    if (SDL_GetDesktopDisplayMode(0, &mode) == 0) scale = std::max(2, mode.h * 8 / 10 / kViewH);
-    SDL_Window* window = SDL_CreateWindow("DigiEngine X", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                          kViewW * scale, kViewH * scale,
-                                          SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    SDL_Window* window = nullptr;
+    if (kShell) {
+        // Android: the whole display, system bars hidden, either way up.
+        SDL_SetHint(SDL_HINT_ORIENTATIONS, "Portrait PortraitUpsideDown LandscapeLeft LandscapeRight");
+        window = SDL_CreateWindow("DigiEngine X", 0, 0, 0, 0,
+                                  SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+    } else {
+        // PC: the largest whole-number scale that fits ~80% of the screen
+        // height, so pixels stay crisp. The window can still be resized freely.
+        int scale = 4;
+        SDL_DisplayMode mode;
+        if (SDL_GetDesktopDisplayMode(0, &mode) == 0) scale = std::max(2, mode.h * 8 / 10 / vpet::kScreenH);
+        window = SDL_CreateWindow("DigiEngine X", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                                  vpet::kScreenW * scale, vpet::kScreenH * scale,
+                                  SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+    }
+    SDL_Renderer* renderer =
+        window ? SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC) : nullptr;
     if (!window || !renderer) {
         SDL_Log("window/renderer creation failed: %s", SDL_GetError());
         return 1;
     }
-    SDL_RenderSetLogicalSize(renderer, kViewW, kViewH);
-    SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
-    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING,
-                                             kViewW, kViewH);
+    if (!kShell) {
+        SDL_RenderSetLogicalSize(renderer, vpet::kScreenW, vpet::kScreenH);
+        SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
+    }
 
     std::vector<std::string> pack_dirs;
     if (argc > 1) {
@@ -226,7 +283,8 @@ int main(int argc, char* argv[]) {
     std::string save_dir = pref ? pref : "";
     SDL_free(pref);
 
-    SdlPlatform platform(renderer, texture, save_dir);
+    auto platform_ptr = std::make_unique<SdlPlatform>(renderer, save_dir);  // freed before the renderer
+    SdlPlatform& platform = *platform_ptr;
 
     // Sound is optional: if no audio device opens, the game just stays quiet.
     SDL_AudioSpec want{}, have{};
@@ -239,6 +297,7 @@ int main(int argc, char* argv[]) {
     SDL_AudioDeviceID audio = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
     if (audio) SDL_PauseAudioDevice(audio, 0);
     vpet::Game game(platform);
+    platform.attach(&game);
     if (!game.init(pack_dirs)) SDL_Log("failed to load packs from %s", pack_dirs.front().c_str());
 
     bool running = true;
@@ -249,14 +308,16 @@ int main(int argc, char* argv[]) {
             if (e.type == SDL_KEYDOWN && e.key.keysym.scancode == SDL_SCANCODE_ESCAPE) running = false;
             // Android: save when the app goes to the background (it may be killed there).
             if (e.type == SDL_APP_WILLENTERBACKGROUND) game.save();
-            if (kShell) platform.handle(e);
+            platform.handle(e);
         }
         game.frame();
         SDL_Delay(1);  // vsync paces the loop; this keeps CPU use low if vsync is off
     }
     game.save();
 
-    SDL_DestroyTexture(texture);
+    if (audio) SDL_CloseAudioDevice(audio);  // stops the callback before the platform goes
+    audio = 0;
+    platform_ptr.reset();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     if (audio) SDL_CloseAudioDevice(audio);

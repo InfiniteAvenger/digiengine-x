@@ -17,6 +17,8 @@ std::unique_ptr<Scene> make_quest_scene(Game& game);
 std::unique_ptr<Scene> make_cryo_scene(Game& game);
 std::unique_ptr<Scene> make_settings_scene(Game& game);
 std::unique_ptr<Scene> make_moves_scene(Game& game);
+// First launch: a title screen for choosing which pack to play.
+std::unique_ptr<Scene> make_welcome_scene(Game& game);
 
 // Shared drawing helpers for full-screen menus.
 std::string format_duration(uint64_t ms);

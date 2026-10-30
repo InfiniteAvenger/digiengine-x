@@ -28,7 +28,9 @@ public:
     int32_t offset = -10 * 3600;            // so local time starts at 12:13
     uint8_t held = 0;
     vpet::Framebuffer last;
-    std::map<std::string, std::string> saves;
+    // A settings save already there, so tests skip the first-launch welcome
+    // (the welcome check clears it).
+    std::map<std::string, std::string> saves = {{"settings", ""}};
 
     uint64_t now_ms() override { return clock; }
     int32_t utc_offset_s() override { return offset; }
@@ -87,6 +89,32 @@ void write_bmp(const std::string& path, const vpet::Color* px, int pw, int ph, i
             line[size_t(x * 3 + 0)] = char((c & 0x1F) << 3);
             line[size_t(x * 3 + 1)] = char(((c >> 5) & 0x3F) << 2);
             line[size_t(x * 3 + 2)] = char((c >> 11) << 3);
+        }
+        f.write(line.data(), row);
+    }
+}
+
+// A full-color 0xAARRGGBB image at its own size.
+void write_bmp32(const std::string& path, const std::vector<uint32_t>& px, int w, int h) {
+    const int row = (w * 3 + 3) / 4 * 4;  // rows are padded to 4 bytes
+    unsigned char hdr[54] = {'B', 'M'};
+    auto put32 = [&](int off, uint32_t v) { for (int i = 0; i < 4; ++i) hdr[off + i] = uint8_t(v >> (8 * i)); };
+    put32(2, 54 + uint32_t(row * h));
+    put32(10, 54);
+    put32(14, 40);
+    put32(18, uint32_t(w));
+    put32(22, uint32_t(h));
+    hdr[26] = 1;
+    hdr[28] = 24;
+    std::ofstream f(path, std::ios::binary);
+    f.write(reinterpret_cast<char*>(hdr), 54);
+    std::string line(size_t(row), '\0');
+    for (int y = h - 1; y >= 0; --y) {
+        for (int x = 0; x < w; ++x) {
+            uint32_t c = px[size_t(y) * size_t(w) + size_t(x)];
+            line[size_t(x * 3 + 0)] = char(c & 0xFF);
+            line[size_t(x * 3 + 1)] = char((c >> 8) & 0xFF);
+            line[size_t(x * 3 + 2)] = char((c >> 16) & 0xFF);
         }
         f.write(line.data(), row);
     }
@@ -788,6 +816,28 @@ int main(int argc, char* argv[]) {
         std::fprintf(stderr, "usage: vpet_snapshot <pack_dir> <out_dir>\n");
         return 2;
     }
+    std::string out = argv[2];
+    {
+        // First launch: a welcome screen over home picks the pack; B starts.
+        FakePlatform fresh;
+        fresh.saves.clear();
+        vpet::Game g(fresh);
+        g.init(argv[1]);
+        fresh.clock += 33;
+        g.frame();
+        write_bmp(out + "/00_welcome.bmp", fresh.last);
+        bool shown = g.settings_open() && g.first_launch();
+        fresh.held = vpet::BTN_B;
+        fresh.clock += 33;
+        g.frame();
+        fresh.held = 0;
+        fresh.clock += 33;
+        g.frame();
+        vpet::Game again(fresh);
+        again.init(argv[1]);
+        check(shown && !g.settings_open() && !again.first_launch() && !again.settings_open(),
+              "welcome: shown on the first launch only; B starts the game");
+    }
     FakePlatform p;
     pack_tool_checks(p, argv[1]);
     evolution_checks(p, argv[1]);
@@ -797,7 +847,6 @@ int main(int argc, char* argv[]) {
     combat_checks(p, argv[1]);
     auto game = std::make_unique<vpet::Game>(p);
     if (!game->init(argv[1])) return 1;
-    std::string out = argv[2];
     const vpet::Pack& pack = game->pack();
     auto pet = [&]() -> vpet::Pet& { return game->pet(); };
 
@@ -1139,13 +1188,29 @@ int main(int argc, char* argv[]) {
           "level, run, inventory and garden survive a reload");
     run(500);
     shot("21_home_day");
+    // The Android handheld frame, on a portrait and a landscape phone (half
+    // a 1080x2340 screen), with B held down.
+    for (auto [w, h, name] : {std::tuple{540, 1170, "21b_shell_portrait"}, std::tuple{1170, 540, "21c_shell_landscape"}}) {
+        vpet::Shell shell;
+        shell.build(w, h, vpet::ShellStyle{});
+        write_bmp32(out + "/" + name + ".bmp", shell.compose(p.last, vpet::BTN_B), w, h);
+        bool hits = true;
+        for (int i = 0; i < 3; ++i) {
+            hits = hits && shell.button_at(shell.button_cx(i), shell.button_cy(i)) == (1 << i);
+            hits = hits && shell.button_x(i) + shell.button_size() <= w;  // fully on screen
+        }
+        int mid = shell.screen_x() + shell.screen_size() / 2;
+        check(hits && shell.button_at(mid, shell.screen_y() + shell.screen_size() / 2) == 0,
+              "shell: three buttons right of the screen hit by touch; the screen itself is not a button");
+        check(shell.screen_x() >= 0 && shell.screen_y() >= 0 && shell.screen_x() + shell.screen_size() < shell.button_x(0) &&
+                  shell.screen_size() * 10 >= std::min(w, h) * 6,
+              "shell: the screen fits beside the buttons and fills most of the narrow side");
+    }
     {
-        vpet::Shell shell;  // the PC/Android handheld frame, with B held down
-        shell.compose(p.last, vpet::BTN_B);
-        write_bmp(out + "/21b_shell.bmp", shell.pixels(), vpet::kShellW, vpet::kShellH);
-        check(vpet::Shell::button_at(180, 50) == vpet::BTN_A && vpet::Shell::button_at(180, 82) == vpet::BTN_B &&
-                  vpet::Shell::button_at(180, 114) == vpet::BTN_C && vpet::Shell::button_at(60, 60) == 0,
-              "shell: the three buttons sit right of the screen; the screen itself is not a button");
+        vpet::Shell a, b;  // colors come from the style
+        a.build(300, 400, vpet::ShellStyle{});
+        b.build(300, 400, vpet::ShellStyle{3, 1, 11});
+        check(a.body()[0] != b.body()[0] && a.button(0, false) != b.button(0, false), "shell: style colors change the body and buttons");
     }
     select(8);
     run(400);

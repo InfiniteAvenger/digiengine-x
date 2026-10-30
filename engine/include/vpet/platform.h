@@ -32,6 +32,9 @@ public:
     // Save slots, stored wherever the platform keeps user data.
     virtual bool load_save(const std::string& slot, std::string& out) = 0;
     virtual bool write_save(const std::string& slot, const std::string& data) = 0;
+    // True if the platform draws a handheld shell around the screen; settings
+    // then offer its colors (Game::shell_style()).
+    virtual bool has_shell() const { return false; }
 };
 
 }  // namespace vpet

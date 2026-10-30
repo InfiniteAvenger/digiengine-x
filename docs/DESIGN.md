@@ -130,7 +130,12 @@ ESP32 reads straight from flash.
 
 ## Settings, packs and versions
 
+- **First launch:** a title screen over the home screen picks the pack (A next
+  pack, B start); the egg's timers start when B is pressed.
 - Hold **A+C for 3 seconds** on any screen to open settings. There is no icon.
+- **Shell** (Android only): colors of the body, the keyhole faceplate around
+  the screen and the buttons, from a fixed palette. The shell fills the whole
+  display at its own resolution in either orientation.
 - **Pack:** every folder in `packs/` is a pack; switching saves the current one,
   and each pack keeps its own save. The last pack used opens on launch.
 - **Version:** a pack's `rosters`; new eggs hatch from the chosen one.
