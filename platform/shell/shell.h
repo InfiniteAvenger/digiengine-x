@@ -1,10 +1,11 @@
 #pragma once
 // The handheld shell drawn around the game screen on Android. It fills the
-// whole window at the window's own resolution: a plastic body with the
-// DIGIENGINE X logo, a keyhole-shaped faceplate in a contrasting color around
-// the screen, and three round buttons to the right. Colors come from the
-// player's ShellStyle. Pure pixels, no platform calls, so any frontend can
-// use it.
+// whole window at the window's own resolution and is lit like a real toy: a
+// plastic front with a molded lip, an embossed DIGIENGINE X logo, a glossy
+// keyhole-shaped faceplate in a contrasting color with screws, a speaker
+// grille and power light, and three domed buttons in collars to the right.
+// Colors come from the player's ShellStyle. Pure pixels, no platform calls,
+// so any frontend can use it.
 #include <cstdint>
 #include <vector>
 #include "vpet/framebuffer.h"
@@ -31,6 +32,9 @@ public:
     int screen_x() const { return screen_x_; }
     int screen_y() const { return screen_y_; }
     int screen_size() const { return screen_size_; }
+    // Drawn over the game: the LCD's pixel grid, its recessed edge shadow
+    // and glare on the glass. screen_size() square, with alpha.
+    const std::vector<Argb>& glass() const { return glass_; }
 
     // Button i (0 = A, 1 = B, 2 = C) as a square sprite with alpha, up or
     // pressed, and where its top-left corner goes.
@@ -51,7 +55,7 @@ public:
 private:
     int w_ = 0, h_ = 0;
     ShellStyle style_;
-    std::vector<Argb> body_;
+    std::vector<Argb> body_, glass_;
     int screen_x_ = 0, screen_y_ = 0, screen_size_ = 0;
     int button_size_ = 0;
     float button_r_ = 0;

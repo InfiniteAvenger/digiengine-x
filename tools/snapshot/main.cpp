@@ -1207,6 +1207,20 @@ int main(int argc, char* argv[]) {
               "shell: the screen fits beside the buttons and fills most of the narrow side");
     }
     {
+        // A few color choices side by side: black/white/red, white/navy/yellow, pink/purple/sky.
+        const vpet::ShellStyle styles[] = {{2, 1, 4}, {1, 12, 7}, {14, 13, 10}};
+        const int sw = 360, sh = 780;
+        std::vector<uint32_t> strip(size_t(sw * 3 * sh));
+        for (int i = 0; i < 3; ++i) {
+            vpet::Shell shell;
+            shell.build(sw, sh, styles[i]);
+            std::vector<uint32_t> img = shell.compose(p.last, 0);
+            for (int y = 0; y < sh; ++y)
+                std::copy(img.begin() + y * sw, img.begin() + (y + 1) * sw, strip.begin() + (y * sw * 3 + i * sw));
+        }
+        write_bmp32(out + "/21d_shell_colors.bmp", strip, sw * 3, sh);
+    }
+    {
         vpet::Shell a, b;  // colors come from the style
         a.build(300, 400, vpet::ShellStyle{});
         b.build(300, 400, vpet::ShellStyle{3, 1, 11});

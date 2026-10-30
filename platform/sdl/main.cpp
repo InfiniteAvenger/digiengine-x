@@ -123,6 +123,7 @@ public:
             SDL_RenderCopy(renderer_, body_, nullptr, nullptr);
             SDL_Rect dst{shell_.screen_x(), shell_.screen_y(), shell_.screen_size(), shell_.screen_size()};
             SDL_RenderCopy(renderer_, screen_, nullptr, &dst);
+            SDL_RenderCopy(renderer_, glass_, nullptr, &dst);  // LCD grid, shade and glare
             uint8_t held = buttons();
             for (int i = 0; i < 3; ++i) {
                 SDL_Rect b{shell_.button_x(i), shell_.button_y(i), shell_.button_size(), shell_.button_size()};
@@ -196,13 +197,14 @@ private:
             SDL_UpdateTexture(t, nullptr, px.data(), tw * 4);
         };
         upload(body_, shell_.body(), w, h);
+        upload(glass_, shell_.glass(), shell_.screen_size(), shell_.screen_size());
         for (int i = 0; i < 3; ++i)
             for (int down = 0; down < 2; ++down)
                 upload(button_[i][down], shell_.button(i, down), shell_.button_size(), shell_.button_size());
     }
 
     void destroy_textures() {
-        for (SDL_Texture** t : {&screen_, &body_})
+        for (SDL_Texture** t : {&screen_, &body_, &glass_})
             if (*t) SDL_DestroyTexture(*t), *t = nullptr;
         for (auto& pair : button_)
             for (SDL_Texture*& t : pair)
@@ -214,6 +216,7 @@ private:
     const vpet::Game* game_ = nullptr;
     SDL_Texture* screen_ = nullptr;  // the game's 120x120 screen
     SDL_Texture* body_ = nullptr;
+    SDL_Texture* glass_ = nullptr;  // drawn over the game screen
     SDL_Texture* button_[3][2] = {};
     vpet::Shell shell_;
     uint8_t mouse_ = 0;
