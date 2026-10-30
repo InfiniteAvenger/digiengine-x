@@ -27,7 +27,7 @@ enum class Phase { Lobby, Map, Walk, Messages, Choose, Items, Mini, Cleared, Cam
 
 // --- Overhead map look ----------------------------------------------------------
 
-constexpr int kMapTop = 12, kMapPanelY = 102;
+constexpr int kMapTop = 12, kMapPanelY = 100;
 constexpr int kRowGap = 22;    // pixels between floors on the map
 constexpr int kStandY = 90;    // where the pet's row sits on screen
 constexpr int kEntryRow = -1;  // the zone entrance, below the first floor
@@ -56,22 +56,57 @@ uint32_t hash3(int a, int b, uint32_t c) {
     return h ^ (h >> 16);
 }
 
-// A wide dirt path between two points.
-void draw_path(Framebuffer& fb, int x0, int y0, int x1, int y1, Color c) {
-    int steps = std::max(std::abs(x1 - x0), std::abs(y1 - y0));
-    for (int i = 0; i <= steps; ++i) {
-        int x = x0 + (x1 - x0) * i / std::max(steps, 1), y = y0 + (y1 - y0) * i / std::max(steps, 1);
-        fb.fill_rect(x - 1, y - 1, 3, 3, c);
-    }
+// Calls fn(x, y) for each point from (x0, y0) to (x1, y1), one pixel apart.
+template <typename Fn>
+void along(int x0, int y0, int x1, int y1, Fn fn) {
+    int steps = std::max({std::abs(x1 - x0), std::abs(y1 - y0), 1});
+    for (int i = 0; i <= steps; ++i) fn(i, steps, x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps);
 }
 
-// Marching dots along a path, for the ways the pet can go next.
-void draw_trail(Framebuffer& fb, int x0, int y0, int x1, int y1, Color c, uint64_t now) {
-    int steps = std::max(std::abs(x1 - x0), std::abs(y1 - y0));
+// A dirt road between two points: 4 pixels wide with a darker edge.
+void draw_road(Framebuffer& fb, int x0, int y0, int x1, int y1, Color fill, Color edge) {
+    along(x0, y0, x1, y1, [&](int, int, int x, int y) { fb.fill_rect(x - 2, y - 2, 5, 5, edge); });
+    along(x0, y0, x1, y1, [&](int, int, int x, int y) { fb.fill_rect(x - 1, y - 1, 3, 3, fill); });
+}
+
+// Faint footprints for paths further ahead.
+void draw_footprints(Framebuffer& fb, int x0, int y0, int x1, int y1, Color c) {
+    along(x0, y0, x1, y1, [&](int i, int steps, int x, int y) {
+        if (i > 7 && i < steps - 7 && i % 4 == 0) fb.set(x, y, c);
+    });
+}
+
+// Marching dots along a road, for the way the pet is about to go.
+void draw_march(Framebuffer& fb, int x0, int y0, int x1, int y1, Color c, uint64_t now) {
     int phase = int(now / 90) % 4;
-    for (int i = 6; i <= steps - 6; ++i)
-        if ((i + 4 - phase) % 4 == 0)
-            fb.set(x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps, c);
+    along(x0, y0, x1, y1, [&](int i, int steps, int x, int y) {
+        if (i > 7 && i < steps - 7 && (i + 4 - phase) % 4 == 0) fb.fill_rect(x, y, 1, 1, c);
+    });
+}
+
+// A filled circle of radius r around the center of pixel (cx, cy).
+void disc(Framebuffer& fb, int cx, int cy, float r, Color c) {
+    int ri = int(r) + 1;
+    for (int dy = -ri; dy <= ri; ++dy)
+        for (int dx = -ri; dx <= ri; ++dx)
+            if (float(dx * dx + dy * dy) <= r * r + r * 0.8f) fb.set(cx + dx, cy + dy, c);  // rounder pixel circles
+}
+
+// A flat ellipse, for shadows on the ground.
+void shadow(Framebuffer& fb, int cx, int cy, int rx, Color c) {
+    fb.fill_rect(cx - rx + 1, cy - 1, rx * 2 - 1, 3, c);
+    fb.fill_rect(cx - rx, cy, rx * 2 + 1, 1, c);
+}
+
+// The rim color of each kind of node on the map.
+Color node_rim(Node n) {
+    switch (n) {
+        case Node::Battle: return rgb(0xd8, 0x4a, 0x4a);
+        case Node::Campfire: return rgb(0xef, 0x8a, 0x3c);
+        case Node::Forage: return rgb(0x48, 0xb0, 0x5c);
+        case Node::Boss: return rgb(0xff, 0xcd, 0x4c);
+    }
+    return rgb(0xd8, 0x4a, 0x4a);
 }
 
 class QuestScene : public Scene {
@@ -519,82 +554,131 @@ void QuestScene::draw_map(Framebuffer& fb) {
     };
     int stand_col = stand == kEntryRow ? 0 : pet.run.col >= 0 ? pet.run.col : choices_.empty() ? 0 : choices_[0];
 
-    // Ground: soft patches, then plants and specks, skipping the nodes.
+    // Ground: broad soft blotches in three tones (smooth noise, not tiles),
+    // darker toward the top and bottom edges.
+    const Color light = mix(b.ground, rgb(0xff, 0xff, 0xff), 22);
+    auto noise = [&](int x, int wy) {  // bilinear value noise on an 8-pixel grid, 0-255
+        int gx = x >> 3, gy = (wy + 800) >> 3, fx = x & 7, fy = (wy + 800) & 7;
+        auto v = [&](int a, int c) { return int(hash3(a, c, seed ^ 0x9e3779b9u) & 0xFF); };
+        int top = v(gx, gy) * (8 - fx) + v(gx + 1, gy) * fx, bot = v(gx, gy + 1) * (8 - fx) + v(gx + 1, gy + 1) * fx;
+        return (top * (8 - fy) + bot * fy) / 64;
+    };
     for (int y = kMapTop; y < kMapPanelY; ++y) {
         int wy = y - scroll;
         for (int x = 0; x < kScreenW; ++x) {
-            uint32_t h = hash3(x / 6, (wy + 600) / 6, seed);
-            bool patch = h % 5 == 0 && ((x + y) & 1);
-            fb.set(x, y, patch ? b.patch : b.ground);
+            int n = noise(x, wy) + ((x ^ y) & 1) * 10;  // a touch of dither at the blotch edges
+            Color c = n < 70 ? b.patch : n > 190 ? light : b.ground;
+            int edge = std::min(y - kMapTop, kMapPanelY - 1 - y);
+            if (edge < 4 && ((x + y) & 1 || edge < 2)) c = mix(c, rgb(0, 0, 0), 50 - edge * 10);
+            fb.set(x, y, c);
         }
     }
     auto near_node = [&](int x, int wy) {
         for (int r = 0; r < kBossEvery; ++r)
             for (int c = 0; c < kMapCols; ++c)
-                if (map_.at[r][c].used && std::abs(x - node_x(r, c)) < 11 &&
-                    std::abs(wy - (kStandY - r * kRowGap)) < 11)
+                if (map_.at[r][c].used && std::abs(x - node_x(r, c)) < 12 &&
+                    std::abs(wy - (kStandY - r * kRowGap)) < 12)
                     return true;
-        return std::abs(x - kScreenW / 2) < 9 && std::abs(wy - (kStandY - kEntryRow * kRowGap)) < 9;
+        return std::abs(x - kScreenW / 2) < 10 && std::abs(wy - (kStandY - kEntryRow * kRowGap)) < 10;
     };
+    // Scenery: round trees with a shadow, grass tufts and little flowers.
     for (int cy = (kMapTop - scroll) / 10 - 1; cy * 10 < kMapPanelY - scroll + 10; ++cy) {
         for (int cx = 0; cx < kScreenW / 10; ++cx) {
             uint32_t h = hash3(cx + 100, cy + 1000, seed ^ 0x5bd1e995u);
             int x = cx * 10 + int(h >> 8) % 7, wy = cy * 10 + int(h >> 12) % 7, y = wy + scroll;
             if (near_node(x, wy)) continue;
-            if (h % 6 == 0) {  // a tree, cactus or pine: a rounded top on a short trunk
-                fb.fill_rect(x - 1, y - 3, 3, 1, b.plant);
-                fb.fill_rect(x - 2, y - 2, 5, 2, b.plant);
-                fb.fill_rect(x, y - 2, 2, 2, b.plant_dark);
-                fb.fill_rect(x - 1, y, 3, 1, b.plant_dark);
-                fb.set(x, y + 1, b.trunk);
-            } else if (h % 6 == 1) {
-                fb.set(x, y, b.speck);
-                fb.set(x + 3, y + 2, b.speck);
+            switch (h % 9) {
+                case 0:  // a tree (a cactus or pine in other biomes, by color)
+                    shadow(fb, x + 1, y + 2, 3, mix(b.patch, rgb(0, 0, 0), 60));
+                    fb.set(x, y + 1, b.trunk);
+                    fb.set(x, y + 2, b.trunk);
+                    fb.fill_rect(x - 2, y - 4, 5, 5, b.plant);
+                    fb.fill_rect(x - 3, y - 3, 7, 3, b.plant);
+                    fb.fill_rect(x - 1, y - 5, 3, 1, b.plant);
+                    fb.fill_rect(x + 1, y - 2, 2, 2, b.plant_dark);
+                    fb.fill_rect(x - 2, y, 5, 1, b.plant_dark);
+                    fb.set(x - 1, y - 4, mix(b.plant, rgb(0xff, 0xff, 0xff), 70));
+                    fb.set(x - 2, y - 3, mix(b.plant, rgb(0xff, 0xff, 0xff), 50));
+                    break;
+                case 1:
+                case 2:  // a grass tuft
+                    fb.set(x - 1, y - 1, b.plant);
+                    fb.set(x, y - 2, b.plant);
+                    fb.set(x + 1, y - 1, b.plant);
+                    fb.set(x, y - 1, b.plant_dark);
+                    break;
+                case 3:  // a flower
+                    fb.set(x, y + 1, b.plant_dark);
+                    fb.set(x - 1, y, b.speck);
+                    fb.set(x + 1, y, b.speck);
+                    fb.set(x, y - 1, b.speck);
+                    fb.set(x, y, mix(b.speck, rgb(0x80, 0x40, 0x20), 120));
+                    break;
+                case 4: fb.set(x, y, b.speck); break;
+                default: break;
             }
         }
     }
 
-    // Paths: edges first, then the ways the pet can go next as moving dots.
+    // Paths: roads already walked (worn) and the ways on from here; faint
+    // footprints for the paths further ahead.
     const int last = kBossEvery - 1;
+    const Color worn = mix(b.path, b.ground, 110), worn_edge = mix(b.path_edge, b.ground, 110);
+    auto link = [&](int r0, int c0, int r1, int c1) {
+        int x0 = node_x(r0, c0), y0 = row_y(r0), x1 = node_x(r1, c1), y1 = row_y(r1);
+        if (r1 <= stand) draw_road(fb, x0, y0, x1, y1, worn, worn_edge);
+        else draw_footprints(fb, x0, y0, x1, y1, b.path_edge);
+    };
     for (int r = 0; r < last; ++r)
         for (int c = 0; c < kMapCols; ++c)
             for (int n = 0; n < kMapCols; ++n)
-                if (map_.at[r][c].used && (map_.at[r][c].next >> n & 1))
-                    draw_path(fb, node_x(r, c), row_y(r), node_x(r + 1, n), row_y(r + 1), r < stand ? b.path_edge : b.path);
+                if (map_.at[r][c].used && (map_.at[r][c].next >> n & 1)) link(r, c, r + 1, n);
     for (int c = 0; c < kMapCols; ++c)
-        if (map_.at[0][c].used)
-            draw_path(fb, node_x(kEntryRow, 0), row_y(kEntryRow), node_x(0, c), row_y(0), row == 0 ? b.path : b.path_edge);
+        if (map_.at[0][c].used) link(kEntryRow, 0, 0, c);
     int sx = node_x(stand, stand_col), sy = row_y(stand);
     for (size_t i = 0; i < choices_.size(); ++i) {
         bool sel = int(i) == pick_;
         if (phase_ == Phase::Walk && !sel) continue;
-        if (sel) draw_path(fb, sx, sy, node_x(row, choices_[i]), row_y(row), t.accent);
-        draw_trail(fb, sx, sy, node_x(row, choices_[i]), row_y(row), sel ? t.ui : b.path_edge, now);
+        int tx = node_x(row, choices_[i]), ty = row_y(row);
+        draw_road(fb, sx, sy, tx, ty, sel ? mix(b.path, rgb(0xff, 0xff, 0xff), 60) : b.path, b.path_edge);
+        if (sel) draw_march(fb, sx, sy, tx, ty, t.accent, now);
     }
 
-    // Nodes: past rows faded, the boss ringed, the chosen one bracketed.
+    // Nodes: round tokens on the ground, rimmed by kind. Cleared ones are
+    // grey; the boss is bigger with a gold rim; the pick gets a bouncing arrow.
+    const Color face = rgb(0x2a, 0x2e, 0x46), outline = rgb(0x1a, 0x1c, 0x2c);
+    const Color ground_shadow = mix(b.patch, rgb(0, 0, 0), 70);
     for (int r = 0; r <= last; ++r) {
         int y = row_y(r);
-        if (y < kMapTop - 8 || y > kMapPanelY + 8) continue;
+        if (y < kMapTop - 12 || y > kMapPanelY + 12) continue;
         for (int c = 0; c < kMapCols; ++c) {
             const MapNode& n = map_.at[r][c];
             if (!n.used) continue;
             int x = node_x(r, c);
-            fb.fill_rect(x - 4, y + 5, 9, 1, b.patch);  // a little shadow
-            if (n.type == Node::Boss && (now / 400) % 2) fb.rect(x - 7, y - 7, 15, 15, t.accent);
-            fb.draw_icon(icons().nodes, int(n.type), x - 4, y - 4, t.ui, b.ground, r <= stand ? 140 : 0);
+            bool boss = n.type == Node::Boss, done = r <= stand;
+            bool picked = !choices_.empty() && r == row && c == target_col() && phase_ == Phase::Map;
+            float rad = boss ? 10.0f : 8.0f;
+            Color rim = done ? rgb(0x6a, 0x6c, 0x78) : node_rim(n.type);
+            if (picked && (now / 250) % 2) rim = mix(rim, rgb(0xff, 0xff, 0xff), 110);
+            shadow(fb, x + 1, y + int(rad) + 1, int(rad) - 1, ground_shadow);
+            if (boss && (now / 400) % 2) disc(fb, x, y, rad + 2.5f, mix(b.ground, t.accent, 120));
+            disc(fb, x, y, rad, outline);
+            disc(fb, x, y, rad - 1, rim);
+            disc(fb, x, y - 1, rad - 2.5f, mix(rim, rgb(0xff, 0xff, 0xff), 90));  // lit top edge
+            disc(fb, x, y, rad - 2.5f, done ? mix(face, rgb(0x60, 0x60, 0x68), 120) : face);
+            // Cleared nodes show their icon as a grey silhouette.
+            if (done) fb.draw_mask(icons().nodes, int(n.type), x - 4, y - 4, rgb(0x7a, 0x7c, 0x88));
+            else fb.draw_sprite(icons().nodes, int(n.type), x - 4, y - 4);
         }
     }
-    if (!choices_.empty() && phase_ == Phase::Map && (now / 300) % 2) {
-        int x = node_x(row, target_col()), y = row_y(row);
-        for (int dx : {-7, 5})
-            for (int dy : {-7, 5}) {
-                fb.fill_rect(x + dx, y + dy, 3, 1, t.accent);
-                fb.fill_rect(x + (dx < 0 ? dx : dx + 2), y + dy + (dy < 0 ? 0 : -1), 1, 2, t.accent);
-            }
+    if (!choices_.empty() && phase_ == Phase::Map) {
+        // An arrow bobbing over the chosen node.
+        int x = node_x(row, target_col()), y = row_y(row) - (row == last ? 18 : 15) - int((now / 200) % 3 == 1);
+        for (int k = 0; k < 4; ++k) fb.fill_rect(x - 3 + k, y + k, 7 - 2 * k, 1, outline);
+        for (int k = 0; k < 3; ++k) fb.fill_rect(x - 2 + k, y + k, 5 - 2 * k, 1, t.accent);
     }
 
-    // The pet, standing on its node or walking up the path.
+    // The pet, standing on its node or walking up the road.
     if (pet_sprite.valid()) {
         int tx = choices_.empty() ? sx : node_x(row, target_col()), ty = row_y(row);
         int px = sx, py = sy;
@@ -604,17 +688,35 @@ void QuestScene::draw_map(Framebuffer& fb) {
             py = sy + (ty - sy) * dt / int(kWalkMs);
         }
         int frame = phase_ == Phase::Walk ? int(now / 150) % 2 : int(now / 350) % 2;
+        shadow(fb, px, py + 4, pet_sprite.w / 2 - 2, ground_shadow);
         fb.draw_sprite(pet_sprite, frame, px - pet_sprite.w / 2, py - pet_sprite.h + 4 - (frame && phase_ == Phase::Walk),
                        1, tx > sx);  // sprites face left
     }
 
-    // Top bar: the floor and how far the boss is.
+    // Top bar: the zone, and a track of the floors to the boss (cleared ones
+    // filled, this one blinking, the boss as a crown).
     fb.fill_rect(0, 0, kScreenW, kMapTop, t.ui);
     fb.fill_rect(0, kMapTop - 1, kScreenW, 1, mix(t.ui, t.accent, 60));
-    fb.draw_text(4, 3, "ZONE " + std::to_string(zone + 1) + "  FLOOR " + std::to_string(floor), t.accent);
-    int to_boss = last - row;
-    std::string boss = to_boss == 0 ? "BOSS!" : "BOSS IN " + std::to_string(to_boss);
-    fb.draw_text(kScreenW - 4 - Framebuffer::text_width(boss), 3, boss, to_boss == 0 ? t.accent : t.ui_text);
+    fb.draw_text(4, 3, "ZONE " + std::to_string(zone + 1), t.accent);
+    const int track_x = 44, step = 7;
+    fb.fill_rect(track_x + 2, 5, step * last, 1, mix(t.ui, t.ui_text, 50));
+    for (int r = 0; r < last; ++r) {
+        int x = track_x + r * step;
+        Color c = r < row ? t.accent : r == row ? ((now / 300) % 2 ? t.ui_text : t.accent) : mix(t.ui, t.ui_text, 70);
+        fb.fill_rect(x, 4, 4, 3, c);
+        fb.fill_rect(x + 1, 3, 2, 5, c);
+    }
+    {
+        int x = track_x + last * step;  // the boss: a little crown
+        Color c = row == last ? ((now / 300) % 2 ? t.ui_text : t.accent) : node_rim(Node::Boss);
+        fb.fill_rect(x, 4, 7, 4, c);
+        fb.set(x, 2, c);
+        fb.set(x, 3, c);
+        fb.set(x + 3, 2, c);
+        fb.set(x + 3, 3, c);
+        fb.set(x + 6, 2, c);
+        fb.set(x + 6, 3, c);
+    }
 
     // Bottom panel: where the chosen path leads, HP, and the buttons.
     Stats ps = pet_stats(pack, pet);
@@ -622,15 +724,21 @@ void QuestScene::draw_map(Framebuffer& fb) {
     fb.fill_rect(0, kMapPanelY, kScreenW, kScreenH - kMapPanelY, t.ui);
     fb.fill_rect(0, kMapPanelY, kScreenW, 1, mix(t.ui, t.accent, 60));
     if (!choices_.empty()) {
-        std::string label = node_label(target().type);
-        if (choices_.size() == 1) label += "  ONE WAY";
-        fb.draw_text(4, kMapPanelY + 4, label, t.accent);
+        Color rim = node_rim(target().type);
+        disc(fb, 7, kMapPanelY + 4, 3.5f, rim);
+        fb.draw_text(13, kMapPanelY + 2, node_label(target().type), rim);
+        if (choices_.size() == 1)
+            fb.draw_text(17 + Framebuffer::text_width(node_label(target().type)), kMapPanelY + 2, "ONE WAY",
+                         mix(t.ui, t.ui_text, 110));
     }
-    std::string hp_text = "HP " + std::to_string(hp) + "/" + std::to_string(ps.hp);
-    fb.draw_text(kScreenW - 4 - Framebuffer::text_width(hp_text), kMapPanelY + 4, hp_text, t.ui_text);
+    // HP as a small bar with the numbers beside it.
+    std::string hp_text = std::to_string(hp) + "/" + std::to_string(ps.hp);
+    int hx = kScreenW - 4 - Framebuffer::text_width(hp_text);
+    fb.draw_text(hx, kMapPanelY + 2, hp_text, t.ui_text);
+    Color hp_fill = hp * 3 < ps.hp ? rgb(0xe0, 0x40, 0x50) : rgb(0x38, 0xb7, 0x64);
+    draw_bar(fb, hx - 25, kMapPanelY + 3, 22, 3, hp, ps.hp, hp_fill, mix(t.ui, t.ui_text, 40));
     if (phase_ == Phase::Map)
-        fb.draw_text(4, kMapPanelY + 11, choices_.size() > 1 ? "A: TURN  B: GO  C: HOME" : "B: GO  C: HOME",
-                     mix(t.ui, t.ui_text, 150));
+        draw_footer(fb, t, choices_.size() > 1 ? "A: TURN B: GO C: HOME" : "B: GO C: HOME");
 }
 
 }  // namespace

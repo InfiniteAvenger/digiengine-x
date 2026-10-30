@@ -1281,6 +1281,33 @@ int main(int argc, char* argv[]) {
     press(vpet::BTN_C);
     press(vpet::BTN_C);
 
+    // The map partway through a zone: cleared nodes, worn roads, the boss near.
+    {
+        vpet::Run saved = pet().run;
+        uint8_t hunger = pet().hunger;
+        bool sick = pet().sick;
+        const uint32_t seed = 4242;
+        vpet::ZoneMap zm = vpet::make_zone_map(seed, 0);
+        int col = 0;
+        while (col < vpet::kMapCols - 1 && !zm.at[5][col].used) ++col;  // a node on the floor just cleared
+        pet().run.floor = 7;
+        pet().run.col = col;
+        pet().run.map_seed = seed;
+        pet().run.hp = -1;
+        pet().sick = false;
+        pet().hunger = uint8_t(vpet::max_hearts(game->pack(), pet()) * 2);
+        select(3);
+        press(vpet::BTN_B);  // lobby -> map
+        press(vpet::BTN_B);
+        run(300);
+        shot("15e_map_midzone");
+        press(vpet::BTN_C);
+        press(vpet::BTN_C);
+        pet().run = saved;
+        pet().hunger = hunger;
+        pet().sick = sick;
+    }
+
     // The timing bar on its own, mid-sweep, to check the gold zone art.
     {
         vpet::Framebuffer fb;
