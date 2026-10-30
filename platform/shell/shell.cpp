@@ -225,24 +225,24 @@ void Shell::build(int w, int h, const ShellStyle& style) {
     const float W = float(w_), H = float(h_), M = std::min(W, H);
 
     // ---- Layout. Sizes are fractions of the screen's side S. ----------------
-    // One group, centered: tall windows stack the logo, the faceplate with
-    // the buttons beside it, and a speaker grille; wide ones (landscape) put
-    // the logo and grille in a column left of the faceplate.
-    constexpr float kPad = 0.075f, kTail = 0.24f, kGap = 0.075f;
-    constexpr float kBtnR = 0.1f, kCollar = 1.3f, kBtnStep = 0.34f;
-    constexpr float kBlockH = 0.2f, kLogoGap = 0.1f, kGrilleGap = 0.13f, kGrilleH = 0.17f;
-    constexpr float kLeftW = 0.75f, kLeftGap = 0.12f;  // landscape's left column
+    // The screen is as big as the window allows, in a thin faceplate border
+    // with the buttons close beside it. Tall windows add the logo above and a
+    // speaker grille below; wide ones (landscape) are just the faceplate and
+    // buttons, centered, with a shorter keyhole tail.
     const bool wide = W > H;
+    constexpr float kPad = 0.045f, kGap = 0.035f;
+    constexpr float kBtnR = 0.09f, kCollar = 1.25f, kBtnStep = 0.3f;
+    constexpr float kBlockH = 0.2f, kLogoGap = 0.1f, kGrilleGap = 0.13f, kGrilleH = 0.17f;
+    const float kTail = wide ? 0.08f : 0.2f;
     const float rim = 0.022f * M;  // the molded lip around the front
-    const float main_w = 1 + 2 * kPad + kGap + 2 * kCollar * kBtnR;
-    const float content_w = main_w + (wide ? kLeftW + kLeftGap : 0);
+    const float content_w = 1 + 2 * kPad + kGap + 2 * kCollar * kBtnR;
     const float main_h = 1 + 2 * kPad + kTail;
     const float content_h = main_h + (wide ? 0 : kBlockH + kLogoGap + kGrilleGap + kGrilleH);
-    const float S = std::floor(std::min((0.94f * W - 2 * rim) / content_w, (0.93f * H - 2 * rim) / content_h));
+    const float S = std::floor(std::min((0.97f * W - 2 * rim) / content_w, (0.96f * H - 2 * rim) / content_h));
 
     const float half = S / 2 + kPad * S;  // the faceplate's square part
     const float left = (W - content_w * S) / 2;
-    const float cx = left + (wide ? (kLeftW + kLeftGap) * S : 0) + half;
+    const float cx = left + half;
     // Sit a little above the middle on tall phones, like a face.
     const float top = wide ? (H - content_h * S) / 2 : (H - content_h * S) * 0.44f;
     const float cy = top + (wide ? 0 : (kBlockH + kLogoGap) * S) + half;
@@ -258,16 +258,16 @@ void Shell::build(int w, int h, const ShellStyle& style) {
     }
 
     // The logo: "DIGIENGINE" and a taller X in the buttons' color, over a
-    // tagline. Centered above the faceplate, or left of it when wide.
+    // tagline, centered above the faceplate (tall windows only).
     CellGrid letters = letter_grid("DIGIENGINE"), ex = letter_grid("X");
     constexpr float kBigX = 1.35f;
     const float logo_units = float(letters.cols) + 2 + float(ex.cols) * kBigX;
-    const float logo_u = (wide ? kLeftW * S : 2 * half * 0.92f) / logo_units;
-    const std::string tagline = "VIRTUAL PET";
+    const float logo_u = 2 * half * 0.92f / logo_units;
+    const std::string tagline = wide ? "" : "VIRTUAL PET";
     const float tag_scale = 0.42f, tag_adv = 5.0f;
-    const float logo_cx = wide ? left + kLeftW * S / 2 : cx;
+    const float logo_cx = cx;
     const float block_h = (7 + 2.4f + 5 * tag_scale) * logo_u;  // letters, gap, tagline
-    const float logo_top = wide ? cy - half + 0.12f * S : top + (kBlockH * S - block_h) / 2;
+    const float logo_top = wide ? -H : top + (kBlockH * S - block_h) / 2;  // off screen when wide
     const float logo_x0 = logo_cx - logo_units * logo_u / 2;
     letters.x0 = logo_x0;
     letters.y0 = logo_top;
@@ -279,18 +279,17 @@ void Shell::build(int w, int h, const ShellStyle& style) {
     const float tag_w = (float(tagline.size()) * tag_adv - 2) * tag_u;
     const float tag_x0 = logo_cx - tag_w / 2, tag_y0 = logo_top + (7 + 2.4f) * logo_u;
 
-    // The keyhole tail under the faceplate, and the grille below it (or
-    // under the logo when wide).
+    // The keyhole tail under the faceplate, and the grille below it (tall
+    // windows only).
     const float tail_he = kTail * S / 2 + 0.03f * S;
     const float tail_cy = cy + half + kTail * S / 2 - 0.03f * S;
+    const float tail_detail_y = cy + half + kTail * S * 0.42f;  // screws and holes
     const float hole_r = 0.019f * S, hole_step = 0.06f * S;
-    const float grille_cx = wide ? logo_cx : cx;
-    const float grille_cy = wide ? cy + 0.3f * S : tail_cy + tail_he + (kGrilleGap + kGrilleH / 2) * S;
-    // The power light: above the A button, or beside it when wide (there's
-    // no room above).
-    const float led_r = 0.022f * S;
-    const float led_x = wide ? std::min(bx + 0.24f * S, W - rim - 0.06f * S) : bx;
-    const float led_y = wide ? float(button_cy_[0]) : cy - half + 0.02f * S;
+    const float grille_cx = wide ? -W : cx;  // off screen when wide
+    const float grille_cy = tail_cy + tail_he + (kGrilleGap + kGrilleH / 2) * S;
+    // The power light, above the A button.
+    const float led_r = 0.02f * S;
+    const float led_x = bx, led_y = cy - half + 0.03f * S;
     // Tall phones have room left over above and below: a lanyard slot at the
     // top and a seam where the case halves meet at the bottom.
     const float spare_top = top - rim, spare_bottom = H - rim - (grille_cy + kGrilleH / 2 * S);
@@ -308,12 +307,12 @@ void Shell::build(int w, int h, const ShellStyle& style) {
     // Distance fields for the big shapes.
     auto face = [&](float x, float y) { return sd_round_rect(x, y, W / 2, H / 2, W / 2 - rim, H / 2 - rim, 0.07f * M); };
     auto plate = [&](float x, float y) {
-        float square = sd_round_rect(x, y, cx, cy, half, half, 0.17f * S);
-        float tail = sd_trapezoid(x, y, cx, tail_cy, 0.17f * S, 0.29f * S, tail_he, 0.06f * S);
-        return smooth_union(square, tail, 0.07f * S);
+        float square = sd_round_rect(x, y, cx, cy, half, half, 0.09f * S);
+        float tail = sd_trapezoid(x, y, cx, tail_cy, 0.17f * S, 0.29f * S, tail_he, 0.05f * S);
+        return smooth_union(square, tail, 0.06f * S);
     };
     auto frame = [&](float x, float y) {  // the dark window the LCD sits in
-        return sd_round_rect(x, y, cx, cy, S / 2 + 0.032f * S, S / 2 + 0.032f * S, 0.04f * S);
+        return sd_round_rect(x, y, cx, cy, S / 2 + 0.016f * S, S / 2 + 0.016f * S, 0.025f * S);
     };
     const float logo_bx0 = logo_x0 - logo_u, logo_bx1 = logo_x0 + (logo_units + 1) * logo_u;
     const float logo_by0 = ex.y0 - logo_u, logo_by1 = ex.y0 + 8 * ex.u;
@@ -323,10 +322,10 @@ void Shell::build(int w, int h, const ShellStyle& style) {
         return std::min(a, b);
     };
     // Two screws hold the faceplate, low on the keyhole's tail.
-    const float screw_r = 0.024f * S;
-    const float screws[2][2] = {{cx - 0.17f * S, tail_cy + 0.045f * S}, {cx + 0.17f * S, tail_cy + 0.045f * S}};
+    const float screw_r = 0.02f * S;
+    const float screws[2][2] = {{cx - 0.13f * S, tail_detail_y}, {cx + 0.13f * S, tail_detail_y}};
 
-    const float lip_bevel = std::max(3.0f, 0.016f * M), plate_bevel = std::max(3.0f, 0.03f * S);
+    const float lip_bevel = std::max(3.0f, 0.016f * M), plate_bevel = std::max(3.0f, 0.016f * S);
     const float logo_bevel = 0.3f * logo_u;
 
     body_.assign(size_t(w_) * size_t(h_), 0);
@@ -491,11 +490,11 @@ void Shell::build(int w, int h, const ShellStyle& style) {
                     p = lerp(p, head, coverage(hd));
                 }
                 for (int k = -1; k <= 1; ++k) {
-                    float hx = cx + float(k) * 0.065f * S, hy = tail_cy + 0.045f * S;
-                    float hd = circle(px, py, hx, hy, 0.02f * S);
+                    float hx = cx + float(k) * 0.05f * S, hy = tail_detail_y;
+                    float hd = circle(px, py, hx, hy, 0.015f * S);
                     if (hd < 1) {
                         float s = std::max(0.0f, 1 + hd / (0.012f * S));
-                        p = lerp(p, lit(darker(trim, 0.7f), -(px - hx) / (0.02f * S) * s, -(py - hy) / (0.02f * S) * s, 0, 1),
+                        p = lerp(p, lit(darker(trim, 0.7f), -(px - hx) / (0.015f * S) * s, -(py - hy) / (0.015f * S) * s, 0, 1),
                                  coverage(hd));
                     }
                 }
@@ -504,7 +503,7 @@ void Shell::build(int w, int h, const ShellStyle& style) {
                 if (fd < 1) {
                     // The window is sunk into the plate: its wall catches
                     // light at the bottom and falls into shade at the top.
-                    float fb = 0.02f * S, wnx = 0, wny = 0;
+                    float fb = 0.012f * S, wnx = 0, wny = 0;
                     if (fd > -fb) {
                         gradient(frame, px, py, gx, gy);
                         float s = bevel_slope(-fd, fb);
