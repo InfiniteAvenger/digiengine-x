@@ -35,6 +35,15 @@ public:
     // True if the platform draws a handheld shell around the screen; settings
     // then offer its colors (Game::shell_style()).
     virtual bool has_shell() const { return false; }
+
+    // Adding a pack from a file the player picks (Android: a .zip from the
+    // system file picker, unpacked into a folder the game searches).
+    enum class ImportState { Idle, Busy, Done, Failed };
+    virtual bool can_import_packs() const { return false; }
+    virtual void start_pack_import() {}
+    // Done: `message` is the new pack's folder name. Failed: the reason.
+    // Done and Failed are reported once, then it goes back to Idle.
+    virtual ImportState pack_import_state(std::string& /*message*/) { return ImportState::Idle; }
 };
 
 }  // namespace vpet

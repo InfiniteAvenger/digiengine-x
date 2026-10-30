@@ -2,6 +2,9 @@
 // port). On Android the game screen sits inside a drawn handheld shell whose
 // three buttons work by touch; on PC it is the plain screen and the keyboard.
 #include <SDL.h>
+#ifdef __ANDROID__
+#include <jni.h>
+#endif
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -30,6 +33,20 @@ public:
     // The shell's colors come from the game's settings.
     void attach(const vpet::Game* game) { game_ = game; }
     bool has_shell() const override { return kShell; }
+
+#ifdef __ANDROID__
+    // Pack import runs in GameActivity (Java): the system file picker, then
+    // unzipping into the phone's pack folder. These call its static methods.
+    bool can_import_packs() const override { return true; }
+    void start_pack_import() override { call_activity("pickPack", "()V"); }
+    ImportState pack_import_state(std::string& message) override {
+        int state = call_activity("importState", "()I");
+        if (state == 0 || state == 1) return state == 0 ? ImportState::Idle : ImportState::Busy;
+        message = activity_string("importMessage");
+        call_activity("clearImport", "()V");
+        return state == 2 ? ImportState::Done : ImportState::Failed;
+    }
+#endif
 
     uint64_t now_ms() override {
         using namespace std::chrono;
@@ -177,6 +194,53 @@ public:
     }
 
 private:
+#ifdef __ANDROID__
+    // GameActivity's class, found through the activity object: FindClass on
+    // this (native) thread would only see system classes.
+    static jclass activity_class(JNIEnv* env) {
+        jobject activity = static_cast<jobject>(SDL_AndroidGetActivity());
+        if (!activity) return nullptr;
+        jclass c = env->GetObjectClass(activity);
+        env->DeleteLocalRef(activity);
+        return c;
+    }
+
+    // Calls a static method returning void ("()V") or int ("()I").
+    static int call_activity(const char* name, const char* sig) {
+        auto* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+        jclass c = env ? activity_class(env) : nullptr;
+        if (!c) return 0;
+        int result = 0;
+        if (jmethodID m = env->GetStaticMethodID(c, name, sig)) {
+            if (sig[2] == 'I') result = env->CallStaticIntMethod(c, m);
+            else env->CallStaticVoidMethod(c, m);
+        }
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        env->DeleteLocalRef(c);
+        return result;
+    }
+
+    // Calls a static method returning a String.
+    static std::string activity_string(const char* name) {
+        auto* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+        jclass c = env ? activity_class(env) : nullptr;
+        if (!c) return "";
+        std::string out;
+        if (jmethodID m = env->GetStaticMethodID(c, name, "()Ljava/lang/String;")) {
+            auto s = static_cast<jstring>(env->CallStaticObjectMethod(c, m));
+            if (s) {
+                const char* chars = env->GetStringUTFChars(s, nullptr);
+                out = chars ? chars : "";
+                env->ReleaseStringUTFChars(s, chars);
+                env->DeleteLocalRef(s);
+            }
+        }
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        env->DeleteLocalRef(c);
+        return out;
+    }
+#endif
+
     uint8_t pointer_buttons() const {
         uint8_t b = mouse_;
         for (const auto& [id, bit] : fingers_) b |= bit;

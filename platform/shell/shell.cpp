@@ -233,11 +233,13 @@ void Shell::build(int w, int h, const ShellStyle& style) {
     const bool wide = W > H;
     constexpr float kPad = 0.045f, kGap = 0.035f, kCollar = 1.25f, kBtnStep = 0.3f;
     constexpr float kBlockH = 0.2f, kLogoGap = 0.1f, kGrilleGap = 0.13f, kGrilleH = 0.17f;
-    constexpr float kEdge = 0.05f, kMiddleMin = 0.35f;  // landscape: margin at each side, least middle
+    // Landscape: margin left of the faceplate, right of the buttons (in from
+    // the curved edge, where a thumb rests), and the least middle.
+    constexpr float kEdge = 0.05f, kRightEdge = 0.22f, kMiddleMin = 0.35f;
     const float kBtnR = wide ? 0.1f : 0.09f;
     const float kTail = wide ? 0.08f : 0.2f;
     const float rim = 0.022f * M;  // the molded lip around the front
-    const float content_w = 1 + 2 * kPad + 2 * kCollar * kBtnR + (wide ? kMiddleMin + 2 * kEdge : kGap);
+    const float content_w = 1 + 2 * kPad + 2 * kCollar * kBtnR + (wide ? kMiddleMin + kEdge + kRightEdge : kGap);
     const float main_h = 1 + 2 * kPad + kTail;
     const float content_h = main_h + (wide ? 0 : kBlockH + kLogoGap + kGrilleGap + kGrilleH);
     const float S = std::floor(std::min((0.97f * W - 2 * rim) / content_w, (0.96f * H - 2 * rim) / content_h));
@@ -245,7 +247,7 @@ void Shell::build(int w, int h, const ShellStyle& style) {
     const float half = S / 2 + kPad * S;  // the faceplate's square part
     button_r_ = kBtnR * S;
     const float cx = wide ? rim + kEdge * S + half : (W - content_w * S) / 2 + half;
-    const float bx = wide ? W - rim - kEdge * S - kCollar * button_r_ : cx + half + kGap * S + kCollar * button_r_;
+    const float bx = wide ? W - rim - kRightEdge * S - kCollar * button_r_ : cx + half + kGap * S + kCollar * button_r_;
     // Sit a little above the middle on tall phones, like a face.
     const float top = wide ? (H - content_h * S) / 2 : (H - content_h * S) * 0.44f;
     const float cy = top + (wide ? 0 : (kBlockH + kLogoGap) * S) + half;

@@ -1,5 +1,6 @@
 // First launch: a title screen over a starry sky where the player picks the
-// pack to play. A shows the next pack, B starts. Shown once; packs can be
+// pack to play. A shows the next pack, B starts, C adds one from a zip (where
+// the platform can). Shown once; packs can be
 // switched later in settings.
 #include "font.h"
 #include "scenes.h"
@@ -35,7 +36,9 @@ public:
 
     void on_press(Button b) override {
         int n = int(game_.pack_names().size());
-        if (b == BTN_A && n > 1) {
+        if (b == BTN_C && game_.platform().can_import_packs()) {
+            game_.push(make_import_scene(game_));  // the new pack opens when it's added
+        } else if (b == BTN_A && n > 1) {
             index_ = (index_ + 1) % n;
         } else if (b == BTN_B) {
             game_.sfx(Game::Sfx::Clear);
@@ -99,7 +102,9 @@ public:
         t.ui = kCard;
         t.ui_text = kText;
         t.accent = kAccent;
-        draw_footer(fb, t, n > 1 ? "A: NEXT PACK B: START" : "B: START");
+        bool add = game_.platform().can_import_packs();
+        draw_footer(fb, t, n > 1 ? (add ? "A: NEXT B: START C: ADD" : "A: NEXT PACK B: START")
+                                 : (add ? "B: START C: ADD PACK" : "B: START"));
     }
 
 private:

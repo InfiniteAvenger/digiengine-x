@@ -14,12 +14,14 @@ phone only, not for sharing), with a generated `packs/index.txt` listing
 them, since files inside an APK can't be listed at runtime. Saves go to the
 app's private storage.
 
-The app also loads packs from a folder on the phone:
-`Android/data/io.github.vpet/files/packs/` (it appears after the first
-launch). Plug the phone into a PC, choose **File transfer**, and copy a pack
-folder (the one holding `pack.json`) in there; then pick it from settings
-(hold A+C). Newer Android versions hide `Android/data` from the phone's own
-Files app, but a PC can still open it.
+To add a pack on the phone, zip its folder (the one holding `pack.json`),
+put the zip anywhere on the phone (Downloads, Google Drive...), then in the
+app hold A+C -> **PACK** -> **+ ADD PACK** (or **C** on the first-launch
+screen) and pick the zip. `GameActivity.java` unpacks it into
+`Android/data/io.github.vpet/files/packs/` and the pack opens. Adding the
+same pack again replaces the old copy; each pack keeps its own save.
+
+That folder can also be filled from a PC over USB (**File transfer**).
 
 ## What you need
 

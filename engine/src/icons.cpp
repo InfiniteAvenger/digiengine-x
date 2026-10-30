@@ -85,7 +85,7 @@ Sprite load(const char* text) {
 }
 
 // Home menu, one 9x9 frame per slot, drawn with an outline by draw_icon:
-// status, feed, train, quest, clean (broom), lights, garden, bag, cryo.
+// status (clipboard), feed, train, quest, clean (broom), lights, garden, bag, cryo.
 constexpr const char* kMenu = R"(size 9 9
 palette
 w f4f4f4
@@ -103,15 +103,15 @@ n 8b5a2b
 l b8865b
 d 5d3a1f
 frame
-.......ww
-.......ww
-....ww.ww
-....ww.ww
-.ww.ww.ww
-.ww.ww.ww
-.ww.ww.ww
-.........
-wwwwwwwww
+...www...
+.wwsssww.
+.wwwwwww.
+.wswsssw.
+.wwwwwww.
+.wswsssw.
+.wwwwwww.
+.wswssww.
+.wwwwwww.
 frame
 ....n.hh.
 ....nhh..

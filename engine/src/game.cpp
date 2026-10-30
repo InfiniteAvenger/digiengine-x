@@ -18,29 +18,11 @@ bool Game::init(const std::vector<std::string>& roots) {
     now_ = platform_.now_ms();
     rng_ ^= uint32_t(now_) | 1;
 
-    // Each root is one pack, or a folder of packs.
-    std::string text;
-    pack_dirs_.clear();
-    pack_names_.clear();
-    for (const std::string& root : roots) {
-        if (platform_.read_file(root + "/pack.json", text)) {
-            pack_dirs_.push_back(root);
-        } else {
-            for (const std::string& name : platform_.list_dirs(root))
-                if (platform_.read_file(root + "/" + name + "/pack.json", text))
-                    pack_dirs_.push_back(root + "/" + name);
-        }
-    }
+    pack_roots_ = roots;
+    find_packs();
     if (pack_dirs_.empty()) {
         error_ = "no packs found in " + (roots.empty() ? std::string("(nothing)") : roots.front());
         return false;
-    }
-    for (const std::string& dir : pack_dirs_) {
-        Json j;
-        std::string err;
-        platform_.read_file(dir + "/pack.json", text);
-        std::string folder = dir.substr(dir.find_last_of('/') + 1);
-        pack_names_.push_back(Json::parse(text, j, err) ? j["name"].str_or(folder) : folder);
     }
 
     // Shared settings: the last pack used, sound, and the clock adjustment.
@@ -67,6 +49,37 @@ bool Game::init(const std::vector<std::string>& roots) {
     bool opened = open_pack(choice) || (choice != 0 && open_pack(0));  // the last one broke; fall back
     if (opened && first_launch_) push(make_welcome_scene(*this));
     return opened;
+}
+
+// Each root is one pack, or a folder of packs.
+void Game::find_packs() {
+    std::string text;
+    pack_dirs_.clear();
+    pack_names_.clear();
+    for (const std::string& root : pack_roots_) {
+        if (platform_.read_file(root + "/pack.json", text)) {
+            pack_dirs_.push_back(root);
+        } else {
+            for (const std::string& name : platform_.list_dirs(root))
+                if (platform_.read_file(root + "/" + name + "/pack.json", text))
+                    pack_dirs_.push_back(root + "/" + name);
+        }
+    }
+    for (const std::string& dir : pack_dirs_) {
+        Json j;
+        std::string err;
+        platform_.read_file(dir + "/pack.json", text);
+        std::string folder = dir.substr(dir.find_last_of('/') + 1);
+        pack_names_.push_back(Json::parse(text, j, err) ? j["name"].str_or(folder) : folder);
+    }
+}
+
+void Game::rescan_packs() {
+    std::string open = pack_dirs_.empty() ? "" : pack_dirs_[size_t(pack_index_)];
+    find_packs();
+    pack_index_ = 0;
+    for (size_t i = 0; i < pack_dirs_.size(); ++i)
+        if (pack_dirs_[i] == open) pack_index_ = int(i);
 }
 
 bool Game::open_pack(int index) {

@@ -131,7 +131,10 @@ ESP32 reads straight from flash.
 ## Settings, packs and versions
 
 - **First launch:** a title screen over the home screen picks the pack (A next
-  pack, B start); the egg's timers start when B is pressed.
+  pack, B start, C add one); the egg's timers start when B is pressed.
+- **Adding packs** (Android): PACK -> + ADD PACK opens the system file picker
+  for a .zip of a pack folder, which is unpacked into the phone's pack folder
+  and opened.
 - Hold **A+C for 3 seconds** on any screen to open settings. There is no icon.
 - **Shell** (Android only): colors of the body, the keyhole faceplate around
   the screen and the buttons, from a fixed palette. The shell fills the whole

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- DigiEngine X: one full-screen SDL activity. Touch is optional so keyboards and
+<!-- DigiEngine X: one full-screen activity (SDL's, plus pack import from a
+     zip). Touch is optional so keyboards and
      gamepads work too. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     android:installLocation="auto">
@@ -14,7 +15,7 @@
         android:theme="@style/AppTheme"
         android:hardwareAccelerated="true">
 
-        <activity android:name="SDLActivity"
+        <activity android:name="io.github.vpet.GameActivity"
             android:label="@string/app_name"
             android:alwaysRetainTaskState="true"
             android:launchMode="singleInstance"

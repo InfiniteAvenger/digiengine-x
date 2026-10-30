@@ -19,6 +19,9 @@ std::unique_ptr<Scene> make_settings_scene(Game& game);
 std::unique_ptr<Scene> make_moves_scene(Game& game);
 // First launch: a title screen for choosing which pack to play.
 std::unique_ptr<Scene> make_welcome_scene(Game& game);
+// Adds a pack from a file the player picks (Platform::can_import_packs()),
+// then opens it.
+std::unique_ptr<Scene> make_import_scene(Game& game);
 
 // Shared drawing helpers for full-screen menus.
 std::string format_duration(uint64_t ms);

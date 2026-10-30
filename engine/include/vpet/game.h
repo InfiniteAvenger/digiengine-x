@@ -47,6 +47,8 @@ public:
     // Saves, then switches packs at the end of this frame (each pack keeps
     // its own save).
     void request_pack(int index) { pending_pack_ = index; }
+    // Looks for packs again (after one was added); the open pack stays open.
+    void rescan_packs();
 
     // The version (roster) new eggs hatch from.
     int roster_index() const;
@@ -122,7 +124,8 @@ private:
     Framebuffer fb_;
     Pack pack_;
     Save save_;
-    std::vector<std::string> pack_dirs_, pack_names_;
+    void find_packs();
+    std::vector<std::string> pack_roots_, pack_dirs_, pack_names_;
     int pack_index_ = 0;
     int pending_pack_ = -1;
     uint64_t combo_since_ = 0;  // when A+C started being held together

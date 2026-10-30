@@ -12,18 +12,22 @@ namespace vpet {
 namespace {
 
 std::unique_ptr<Scene> make_pack_picker(Game& g) {
+    // The installed packs, then (where the platform can) a row to add one.
     auto rows = [&g] {
         std::vector<Row> out;
         Color c = g.pack().theme.ui_text;
         for (size_t i = 0; i < g.pack_names().size(); ++i)
             out.push_back({g.pack_names()[i], int(i) == g.pack_index() ? "OPEN" : "", c});
+        if (g.platform().can_import_packs()) out.push_back({"+ ADD PACK", "ZIP", g.pack().theme.accent});
         return out;
     };
     auto detail = [&g](int row) {
+        if (row >= int(g.pack_names().size())) return std::string("PICK A .ZIP OF A PACK FOLDER ON THIS DEVICE");
         return row == g.pack_index() ? std::string("THE PACK YOU ARE PLAYING")
                                      : std::string("B: SWITCH. EACH PACK KEEPS ITS OWN SAVE");
     };
     auto pick = [&g](int row) {
+        if (row >= int(g.pack_names().size())) return g.push(make_import_scene(g));
         if (row == g.pack_index()) return g.toast("ALREADY OPEN");
         g.request_pack(row);  // applied at the end of this frame; returns to home
     };
@@ -102,6 +106,63 @@ public:
 private:
     int hour_ = 0, minute_ = 0;
     int field_ = 0;  // 0 hours, 1 minutes
+};
+
+// Adding a pack: the platform's file picker runs over the game; this waits
+// for it, then opens the new pack (or shows why it failed).
+class ImportScene : public Scene {
+public:
+    explicit ImportScene(Game& game) : Scene(game) { game.platform().start_pack_import(); }
+    bool is_settings() const override { return true; }
+    void on_press(Button b) override {
+        if (b == BTN_C) game_.pop();
+    }
+
+    void update(uint64_t) override {
+        if (finished_) return;
+        std::string msg;
+        switch (game_.platform().pack_import_state(msg)) {
+            case Platform::ImportState::Busy: busy_ = true; return;
+            case Platform::ImportState::Idle:
+                if (busy_) finish("");  // the picker closed without a result
+                return;
+            case Platform::ImportState::Failed: finish(msg); return;
+            case Platform::ImportState::Done: break;
+        }
+        game_.rescan_packs();
+        int index = -1;
+        for (size_t i = 0; i < game_.pack_dirs().size(); ++i) {
+            const std::string& dir = game_.pack_dirs()[i];
+            if (dir.size() > msg.size() && dir.compare(dir.size() - msg.size() - 1, std::string::npos, "/" + msg) == 0)
+                index = int(i);
+        }
+        if (index < 0) return finish("ADDED, BUT IT WILL NOT LOAD");
+        finish("ADDED " + game_.pack_names()[size_t(index)]);
+        if (index == game_.pack_index()) game_.toast("UPDATED. REOPEN THE APP");
+        else game_.request_pack(index);  // opens it at home
+    }
+
+    void draw(Framebuffer& fb) override {
+        const Theme& t = game_.pack().theme;
+        draw_title(fb, t, "ADD PACK");
+        fb.draw_text_centered(36, busy_ ? "UNPACKING..." : "CHOOSE A .ZIP FILE", t.ui_text);
+        fb.draw_text_centered(52, "ZIP THE PACK FOLDER", mix(t.ui_text, t.ui, 90));
+        fb.draw_text_centered(60, "(THE ONE WITH PACK.JSON)", mix(t.ui_text, t.ui, 90));
+        draw_footer(fb, t, "C: BACK");
+    }
+
+private:
+    void finish(const std::string& toast) {
+        finished_ = true;
+        if (!toast.empty()) {
+            std::string up = toast;
+            for (char& c : up) c = char(toupper(static_cast<unsigned char>(c)));
+            game_.toast(up);
+        }
+        game_.pop();
+    }
+
+    bool busy_ = false, finished_ = false;
 };
 
 // Shell colors: pick a part, then a color. B applies at once so the shell
@@ -270,6 +331,8 @@ std::unique_ptr<Scene> make_debug_scene(Game& g) {
 }
 
 }  // namespace
+
+std::unique_ptr<Scene> make_import_scene(Game& g) { return std::make_unique<ImportScene>(g); }
 
 std::unique_ptr<Scene> make_moves_scene(Game& g) {
     auto rows = [&g] {
