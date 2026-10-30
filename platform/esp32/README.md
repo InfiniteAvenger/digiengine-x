@@ -24,7 +24,7 @@ folder only implements `vpet::Platform`:
 
 So the board is playable with one added switch. All three pins and the board
 revision (V1/V2, printed on the back) are set in `idf.py menuconfig` under
-**vpet board**. Check Waveshare's pinout image that your chosen pins are on
+**DigiEngine X board**. Check Waveshare's pinout image that your chosen pins are on
 the header before wiring.
 
 ## Build and flash
@@ -59,7 +59,7 @@ saving change, or set the time on the device (see below).
 ## Sound
 
 Beeps and jingles play through the onboard buzzer with LEDC PWM. Change the
-pin (or set **-1** for no sound) in `idf.py menuconfig` -> **vpet board** ->
+pin (or set **-1** for no sound) in `idf.py menuconfig` -> **DigiEngine X board** ->
 *Piezo / buzzer GPIO*. Players can also mute in the settings menu (hold A+C).
 When silent the pin is held low, as Waveshare recommends.
 

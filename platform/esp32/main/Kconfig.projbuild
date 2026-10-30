@@ -1,4 +1,4 @@
-menu "vpet board"
+menu "DigiEngine X board"
 
     choice VPET_BOARD_REV
         prompt "Waveshare ESP32-S3-LCD-1.69 revision"

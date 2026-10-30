@@ -2,7 +2,7 @@
   "id": "baker_sample",
   "name": "Baker Sample",
   "version": "0.1.0",
-  "author": "vpet contributors",
+  "author": "DigiEngine X contributors",
   "license": "CC0-1.0",
   "theme": { "bg_top": "9bd4ff", "bg_bottom": "6bbf59", "ui": "1a1c2c", "ui_text": "f4f4f4", "accent": "ffcd75" },
   "moves": [

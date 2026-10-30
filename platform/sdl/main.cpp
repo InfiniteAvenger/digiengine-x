@@ -186,7 +186,7 @@ int main(int argc, char* argv[]) {
     int scale = 4;
     SDL_DisplayMode mode;
     if (SDL_GetDesktopDisplayMode(0, &mode) == 0) scale = std::max(2, mode.h * 8 / 10 / kViewH);
-    SDL_Window* window = SDL_CreateWindow("vpet", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+    SDL_Window* window = SDL_CreateWindow("DigiEngine X", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                           kViewW * scale, kViewH * scale,
                                           SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);

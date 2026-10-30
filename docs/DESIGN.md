@@ -1,4 +1,4 @@
-# Design
+# DigiEngine X design
 
 ## Pillars
 
@@ -125,7 +125,7 @@ ESP32 reads straight from flash.
 
 - ESP32 display panel (canvas assumes 240x240; others letterbox).
 - ESP32 clock source: RTC with backup battery vs. Wi-Fi time sync.
-- Project name and code license.
+- Code license.
 - Floor scaling formula for the infinite quest.
 
 ## Settings, packs and versions

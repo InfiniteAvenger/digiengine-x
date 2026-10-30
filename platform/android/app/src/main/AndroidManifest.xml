@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- vpet: one full-screen SDL activity. Touch is optional so keyboards and
+<!-- DigiEngine X: one full-screen SDL activity. Touch is optional so keyboards and
      gamepads work too. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     android:installLocation="auto">

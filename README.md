@@ -1,4 +1,4 @@
-# vpet (working title)
+# DigiEngine X
 
 A data-driven, open-source virtual pet engine inspired by classic 3-button
 v-pets. The engine contains **no copyrighted creatures, names or art**: all
@@ -6,6 +6,10 @@ content is loaded from external *packs* (sprites + JSON). An original demo pack
 ships in `packs/demo/` so the engine is playable out of the box.
 
 Targets: Windows / Linux PC, Android, and ESP32-S3 handheld hardware.
+
+The project started as "vpet", and that short name stays on the inside: the
+code namespace, build targets and executables, the save folder and the
+Android package ID, so existing saves and installs carry over.
 
 ## Layout
 

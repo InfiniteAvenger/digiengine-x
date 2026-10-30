@@ -1,4 +1,4 @@
-// vpet for Android: SDL2's Java activity plus the game compiled with CMake
+// DigiEngine X for Android: SDL2's Java activity plus the game compiled with CMake
 // (app/jni/CMakeLists.txt). Packs are bundled as assets.
 apply plugin: 'com.android.application'
 

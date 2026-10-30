@@ -45,7 +45,7 @@ std::unique_ptr<Scene> make_about(Game& g) {
                                 {"CREATURES", std::to_string(p.species.size()), c},
                                 {"ITEMS", std::to_string(p.items.size()), c}};
     };
-    auto detail = [](int) { return std::string("VPET ENGINE - OPEN SOURCE"); };
+    auto detail = [](int) { return std::string("DIGIENGINE X - OPEN SOURCE"); };
     return std::make_unique<ListScene>(g, "ABOUT", rows, detail, [](int) {}, "", true);
 }
 

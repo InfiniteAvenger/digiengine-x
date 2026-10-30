@@ -93,7 +93,7 @@ Shell::Shell() : body_(size_t(kShellW * kShellH)), px_(size_t(kShellW * kShellH)
             }
         }
     }
-    engrave(body_, 172, 20, "VPET");
+    engrave(body_, 168, 20, "DIGI X");  // centered over the buttons (x 180)
 }
 
 void Shell::compose(const Framebuffer& fb, uint8_t held) {

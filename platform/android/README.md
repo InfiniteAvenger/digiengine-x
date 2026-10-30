@@ -1,4 +1,4 @@
-# vpet for Android
+# DigiEngine X for Android
 
 The Android app is the same SDL frontend as the PC build
 (`platform/sdl/main.cpp`), built through SDL2's Android port. On Android
