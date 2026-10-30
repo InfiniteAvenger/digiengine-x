@@ -1,9 +1,11 @@
 // Hidden settings (hold A+C for 3 seconds): switch packs and versions, pick
-// equipped moves, and see pack info. Built on the shared list screen.
+// equipped moves, set the clock, use debug tools and see pack info. Built on
+// the shared list screen.
 #include <algorithm>
 #include <cstdio>
 #include "font.h"
 #include "list_scene.h"
+#include "vpet/combat.h"
 #include "vpet/rpg.h"
 
 namespace vpet {
@@ -102,6 +104,124 @@ private:
     int field_ = 0;  // 0 hours, 1 minutes
 };
 
+// Debug: a list of forms to jump to (next forms or earlier ones).
+std::unique_ptr<Scene> make_form_picker(Game& g, bool forward) {
+    auto forms = [&g, forward] {
+        const Pack& pack = g.pack();
+        std::vector<int> out;
+        auto add = [&out](int s) {
+            if (s >= 0 && std::find(out.begin(), out.end(), s) == out.end()) out.push_back(s);
+        };
+        if (forward) {
+            for (const EvolveRule& r : g.species().evolve) add(r.to);
+        } else {
+            for (size_t s = 0; s < pack.species.size(); ++s)
+                for (const EvolveRule& r : pack.species[s].evolve)
+                    if (r.to == g.pet().species) add(int(s));
+        }
+        return out;
+    };
+    auto rows = [&g, forms] {
+        std::vector<Row> out;
+        for (int s : forms())
+            out.push_back({g.pack().species[s].name, stage_label(g.pack().species[s].stage), g.pack().theme.ui_text});
+        return out;
+    };
+    auto detail = [forward](int) {
+        return std::string(forward ? "B: EVOLVE INTO THIS FORM NOW" : "B: GO BACK TO THIS FORM NOW");
+    };
+    auto pick = [&g, forms, forward](int row) {
+        std::vector<int> f = forms();
+        if (row >= int(f.size())) return;
+        change_form(g.pack(), g.pet(), f[row], g.now());
+        g.sfx(Game::Sfx::Evolve);
+        g.toast((forward ? "EVOLVED: " : "DEVOLVED: ") + g.species().name);
+        g.save();
+        g.pop();
+    };
+    return std::make_unique<ListScene>(g, forward ? "EVOLVE" : "DEVOLVE", rows, detail, pick,
+                                       forward ? "NO NEXT FORM" : "NO EARLIER FORM", true);
+}
+
+// Debug tools for trying things quickly: change form, wake, fill, and so on.
+std::unique_ptr<Scene> make_debug_scene(Game& g) {
+    static const char* const kRows[] = {"EVOLVE",   "DEVOLVE", "WAKE UP",    "FILL HEARTS", "HEAL + CLEAN",
+                                        "LEVEL UP", "AGE +1H", "ITEMS +5",   "QUEST +1 ZONE", "NEW EGG"};
+    auto rows = [&g] {
+        Color c = g.pack().theme.ui_text;
+        const Pet& pet = g.pet();
+        std::vector<Row> out;
+        for (const char* label : kRows) out.push_back({label, "", c});
+        out[2].right = pet.asleep ? "ASLEEP" : "AWAKE";
+        out[5].right = "LV" + std::to_string(pet.level);
+        out[8].right = "FLOOR " + std::to_string(pet.run.floor);
+        return out;
+    };
+    auto detail = [](int row) {
+        static const char* const kInfo[] = {
+            "PICK A NEXT FORM AND EVOLVE NOW",  "PICK AN EARLIER FORM TO GO BACK TO", "STAYS AWAKE FOR 2 HOURS",
+            "HUNGER AND STRENGTH TO FULL",      "CURE SICKNESS, CLEAR POOP",          "GAIN ONE LEVEL",
+            "ONE MORE HOUR IN THIS FORM (FOR TIMED EVOLUTIONS)", "5 OF EVERY ITEM INTO THE BAG",
+            "SKIP THE QUEST AHEAD 10 FLOORS",   "REPLACE THIS PET WITH A NEW EGG"};
+        return std::string(kInfo[row]);
+    };
+    auto pick = [&g](int row) {
+        const Pack& pack = g.pack();
+        Pet& pet = g.pet();
+        bool egg = g.species().stage == Stage::Egg;
+        switch (row) {
+            case 0: g.push(make_form_picker(g, true)); return;
+            case 1: g.push(make_form_picker(g, false)); return;
+            case 2:
+                if (!pet.asleep) return g.toast("ALREADY AWAKE");
+                pet.awake_until_ms = g.now() + 2 * 3600 * 1000;
+                pet.asleep = false;
+                pet.lights_on = true;
+                pet.lights_call = Call{};
+                g.toast("WOKE UP");
+                break;
+            case 3:
+                if (egg) return g.toast("STILL AN EGG");
+                pet.hunger = uint8_t(max_hearts(pack, pet) * 2);
+                pet.strength = uint8_t(max_hearts(pack, pet));
+                pet.hunger_call = pet.strength_call = Call{};
+                g.toast("HEARTS FULL");
+                break;
+            case 4:
+                pet.sick = false;
+                pet.poop = 0;
+                g.toast("HEALED AND CLEAN");
+                break;
+            case 5: {
+                std::vector<std::string> msgs;
+                gain_xp(pack, pet, xp_to_next(pet.level), msgs);
+                g.toast("LEVEL " + std::to_string(pet.level));
+                break;
+            }
+            case 6:
+                pet.stage_ms = pet.stage_ms > 3600 * 1000 ? pet.stage_ms - 3600 * 1000 : 0;
+                g.toast("+1 HOUR IN FORM");
+                break;
+            case 7:
+                for (size_t i = 0; i < pack.items.size(); ++i) add_item(g.home(), int(i), 5);
+                g.toast("+5 OF EVERYTHING");
+                break;
+            case 8:
+                pet.run.floor = (zone_of(pet.run.floor) + 1) * kBossEvery + 1;
+                pet.run.best = std::max(pet.run.best, pet.run.floor - 1);
+                pet.run.col = -1;
+                g.toast("ZONE " + std::to_string(zone_of(pet.run.floor) + 1));
+                break;
+            default:
+                g.new_egg();
+                g.toast("NEW EGG");
+                break;
+        }
+        g.save();
+    };
+    return std::make_unique<ListScene>(g, "DEBUG", rows, detail, pick, "", true);
+}
+
 }  // namespace
 
 std::unique_ptr<Scene> make_moves_scene(Game& g) {
@@ -146,7 +266,8 @@ std::unique_ptr<Scene> make_settings_scene(Game& game) {
         int m = g->local_minute();
         std::snprintf(clock, sizeof clock, "%02d:%02d", m / 60, m % 60);
         return std::vector<Row>{{"PACK", pack, c},  {"VERSION", version, c}, {"MOVES", "", c},
-                                {"SOUND", g->sound_on() ? "ON" : "OFF", c}, {"CLOCK", clock, c}, {"ABOUT", "", c}};
+                                {"SOUND", g->sound_on() ? "ON" : "OFF", c}, {"CLOCK", clock, c}, {"DEBUG", "", c},
+                                {"ABOUT", "", c}};
     };
     auto detail = [g](int row) {
         switch (row) {
@@ -155,6 +276,7 @@ std::unique_ptr<Scene> make_settings_scene(Game& game) {
             case 2: return std::string("CHOOSE YOUR 3 EQUIPPED MOVES");
             case 3: return std::string("B: TURN BEEPS AND JINGLES ON OR OFF");
             case 4: return std::string("SET THE TIME OF DAY (BEDTIMES, SKY)");
+            case 5: return std::string("TEST TOOLS: EVOLVE, WAKE, FILL...");
             default: return std::string("PACK DETAILS");
         }
     };
@@ -174,6 +296,7 @@ std::unique_ptr<Scene> make_settings_scene(Game& game) {
                 g->toast(g->sound_on() ? "SOUND ON" : "SOUND OFF");
                 break;
             case 4: g->push(std::make_unique<ClockScene>(*g)); break;
+            case 5: g->push(make_debug_scene(*g)); break;
             default: g->push(make_about(*g)); break;
         }
     };

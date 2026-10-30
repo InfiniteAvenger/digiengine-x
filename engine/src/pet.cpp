@@ -62,7 +62,7 @@ uint32_t tick(const Pack& pack, Pet& pet, uint64_t t, int32_t utc_offset_s) {
     if (s.stage == Stage::Egg) return ev;
     const Care& c = s.care;
 
-    bool sleepy = in_sleep_window(minute_of_day(t, utc_offset_s), c);
+    bool sleepy = in_sleep_window(minute_of_day(t, utc_offset_s), c) && t >= pet.awake_until_ms;
     if (sleepy != pet.asleep) {
         pet.asleep = sleepy;
         ev |= sleepy ? EV_SLEPT : EV_WOKE;
@@ -159,7 +159,15 @@ void thaw(Pet& pet, uint64_t now_ms) {
     pet.sim_ms += dt;
     for (Call* c : {&pet.hunger_call, &pet.strength_call, &pet.lights_call})
         if (c->since_ms) c->since_ms += dt;
+    if (pet.awake_until_ms) pet.awake_until_ms += dt;
     pet.frozen_ms = 0;
+}
+
+void change_form(const Pack& pack, Pet& pet, int species, uint64_t now_ms) {
+    enter_form(pack, pet, species, now_ms);
+    int hearts = max_hearts(pack, pet);
+    pet.hunger = uint8_t(std::min(int(pet.hunger), hearts * 2));
+    pet.strength = uint8_t(std::min(int(pet.strength), hearts));
 }
 
 bool feed_kibble(const Pack& pack, Pet& pet) {
@@ -232,6 +240,7 @@ void write_pet(std::ostringstream& o, const Pack& pack, const Pet& p, const std:
                << '\n';
     if (p.run.map_seed) key("map") << p.run.map_seed << ' ' << p.run.col << '\n';
     if (p.frozen_ms) key("frozen") << p.frozen_ms << '\n';
+    if (p.awake_until_ms) key("awake_until") << p.awake_until_ms << '\n';
     if (!p.moves.empty()) {
         key("moves");
         for (size_t i = 0; i < p.moves.size(); ++i) o << (i ? "," : "") << pack.moves[p.moves[i]].id;
@@ -290,6 +299,7 @@ bool read_pet(const Pack& pack, Fields& f, const std::string& prefix, Pet& out) 
     std::istringstream(get("run")) >> p.run.floor >> p.run.best >> p.run.hp >> p.run.atk_buff >> p.run.def_buff;
     std::istringstream(get("map")) >> p.run.map_seed >> p.run.col;
     num("frozen", p.frozen_ms);
+    num("awake_until", p.awake_until_ms);
     std::stringstream moves(get("moves"));
     for (std::string id; std::getline(moves, id, ',');)
         if (int m = pack.find_move(id); m >= 0) p.moves.push_back(m);

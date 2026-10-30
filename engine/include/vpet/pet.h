@@ -70,6 +70,7 @@ struct Pet {
     std::vector<int> moves;  // equipped move indices; empty = newest three learned
 
     uint64_t frozen_ms = 0;  // when it went into cryo (only while stored)
+    uint64_t awake_until_ms = 0;  // woken during bedtime: stays up until then
 
     bool needs_attention() const { return hunger_call.active() || strength_call.active() || lights_call.active(); }
 };
@@ -129,6 +130,10 @@ bool feed_kibble(const Pack& pack, Pet& pet);
 bool give_medicine(Pet& pet);
 bool clean_up(Pet& pet);
 void toggle_lights(Pet& pet);
+
+// Debug: switches the pet straight to another form, as an evolution would,
+// keeping its meters within the new form's hearts.
+void change_form(const Pack& pack, Pet& pet, int species, uint64_t now_ms);
 void finish_training(const Pack& pack, Pet& pet, bool success);
 
 // Plain "key value" text, one field per line. Species and items are stored by

@@ -941,6 +941,15 @@ int main(int argc, char* argv[]) {
     run(1000);
     check(!pet().lights_on && !pet().lights_call.active(), "lights off answers the call");
     shot("09_asleep_dark");
+    {
+        vpet::Pet woken = pet();  // a copy: the debug wake-up, simulated on its own
+        woken.awake_until_ms = woken.sim_ms + 2 * 3600 * 1000;
+        woken.asleep = false;
+        vpet::simulate(game->pack(), woken, woken.sim_ms + 60 * 1000, int32_t(p.offset));
+        bool stays_up = !woken.asleep;
+        vpet::simulate(game->pack(), woken, woken.awake_until_ms + 60 * 1000, int32_t(p.offset));
+        check(stays_up && woken.asleep, "debug wake-up: awake through bedtime for 2 hours, then back to sleep");
+    }
 
     std::printf("save, quit, reopen next morning\n");
     vpet::Pet before = pet();
@@ -1106,6 +1115,30 @@ int main(int argc, char* argv[]) {
     shot("29_settings_rows");
     press(vpet::BTN_B);
     shot("30_clock");
+    press(vpet::BTN_C);
+    press(vpet::BTN_A);  // cursor on DEBUG
+    press(vpet::BTN_B);
+    shot("31_debug");
+    {
+        const vpet::Pack& pk = game->pack();
+        const auto& now_rules = pk.species[size_t(pet().species)].evolve;
+        int next = now_rules.empty() ? -1 : now_rules[0].to;
+        press(vpet::BTN_B);  // EVOLVE
+        shot("32_debug_evolve");
+        press(vpet::BTN_B);  // the first next form
+        run(100);
+        bool evolved = next >= 0 && pet().species == next;
+        press(vpet::BTN_A);
+        press(vpet::BTN_B);  // DEVOLVE
+        press(vpet::BTN_B);  // back to the first earlier form (any form that evolves into this one)
+        run(100);
+        const auto& rules = pk.species[size_t(pet().species)].evolve;
+        bool back = std::any_of(rules.begin(), rules.end(), [&](const vpet::EvolveRule& r) { return r.to == next; });
+        check(next < 0 || (evolved && back), "debug: evolve to a next form, then devolve to one that leads there");
+        check(pet().hunger <= vpet::max_hearts(pk, pet()) * 2 && pet().strength <= vpet::max_hearts(pk, pet()),
+              "debug: changing form keeps hearts within the new form's meters");
+    }
+    press(vpet::BTN_C);
     press(vpet::BTN_C);
     press(vpet::BTN_C);
     press(vpet::BTN_C);

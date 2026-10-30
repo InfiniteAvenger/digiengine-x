@@ -132,4 +132,8 @@ ESP32 reads straight from flash.
 - **Version:** a pack's `rosters`; new eggs hatch from the chosen one.
 - **Moves:** equip any 1-3 learned moves (also from Status page 4). With
   hand-picked moves and a free slot, newly learned moves are equipped too.
+- **Debug** (temporary, for testing): evolve to a chosen next form, devolve
+  to an earlier one, wake a sleeping pet for 2 hours, fill hearts, heal and
+  clean, level up, add an hour in the current form, add 5 of every item,
+  skip the quest ahead a zone, or start a new egg.
 - **Cryo:** two slots (snowflake icon); frozen pets' timers all pause.
