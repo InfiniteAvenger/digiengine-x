@@ -578,6 +578,13 @@ void settings_checks(const FakePlatform& base, const std::string& demo_dir) {
     check(vpet::read_save(pack, vpet::write_save(pack, s), back) && back.active.moves == pet.moves,
           "equipped moves survive a save");
 
+    s.active.run.map_seed = 77;
+    s.active.run.col = 2;
+    vpet::Save mapped;
+    check(vpet::read_save(pack, vpet::write_save(pack, s), mapped) && mapped.active.run.map_seed == 77 &&
+              mapped.active.run.col == 2 && back.active.run.map_seed == 0 && back.active.run.col == -1,
+          "the quest map and the pet's place on it survive a save (old saves start at the entrance)");
+
     // A save from before half hearts stored whole hearts.
     std::string legacy = "format 1\nspecies voltwing\nhunger 3\n";  // an adult: 3 hearts
     vpet::Save old;
@@ -591,23 +598,57 @@ void combat_checks(FakePlatform& p, const std::string& demo_dir) {
     std::string err;
     vpet::load_pack(p, demo_dir, pack, err);
 
-    bool boss_only = vpet::path_choices(10, 1) == std::vector<vpet::Node>{vpet::Node::Boss} &&
-                     vpet::path_choices(40, 7) == std::vector<vpet::Node>{vpet::Node::Boss};
-    bool fight_first = true, rest_in_threes = true, saw_two = false, saw_three = false, saw_forage = false;
-    for (uint32_t r = 0; r < 300; ++r) {
-        std::vector<vpet::Node> n = vpet::path_choices(int(1 + r % 9), r);
-        fight_first &= n.size() >= 2 && n[0] == vpet::Node::Battle;
-        if (n.size() == 3) {
-            saw_three = true;
-            rest_in_threes &= std::find(n.begin(), n.end(), vpet::Node::Campfire) != n.end();
+    const int last = vpet::kBossEvery - 1;
+    bool shape = true, linked = true, reachable = true, uncrossed = true, first_fights = true, same = true;
+    bool saw_branch = false, saw_one_way = false, saw_forage = false, saw_rest = false;
+    for (uint32_t seed = 1; seed < 200; ++seed) {
+        vpet::ZoneMap m = vpet::make_zone_map(seed * 2654435761u, int(seed % 7));
+        vpet::ZoneMap again = vpet::make_zone_map(seed * 2654435761u, int(seed % 7));
+        for (int r = 0; r <= last; ++r) {
+            int count = 0;
+            for (int c = 0; c < vpet::kMapCols; ++c) {
+                const vpet::MapNode& n = m.at[r][c];
+                same &= n.used == again.at[r][c].used && n.type == again.at[r][c].type && n.next == again.at[r][c].next;
+                if (!n.used) continue;
+                ++count;
+                if (r == 0) first_fights &= n.type == vpet::Node::Battle;
+                saw_forage |= n.type == vpet::Node::Forage;
+                saw_rest |= n.type == vpet::Node::Campfire;
+                if (r < last) {
+                    linked &= n.next != 0;
+                    int ways = 0;
+                    for (int d = 0; d < vpet::kMapCols; ++d) ways += n.next >> d & 1;
+                    saw_branch |= ways >= 2;
+                    saw_one_way |= ways == 1;
+                    for (int c2 = c + 1; c2 < vpet::kMapCols; ++c2)  // a path to the right never lands left of ours
+                        for (int a = 0; a < vpet::kMapCols; ++a)
+                            for (int d = 0; d < a; ++d)
+                                uncrossed &= !((n.next >> a & 1) && (m.at[r][c2].next >> d & 1));
+                }
+                if (r > 0) {
+                    bool in = false;
+                    for (int p = 0; p < vpet::kMapCols; ++p) in |= m.at[r - 1][p].used && (m.at[r - 1][p].next >> c & 1);
+                    reachable &= in;
+                }
+            }
+            shape &= r == last ? count == 1 && m.at[r][0].type == vpet::Node::Boss : count >= (r == 0 ? 2 : 1);
         }
-        saw_two |= n.size() == 2;
-        saw_forage |= std::find(n.begin(), n.end(), vpet::Node::Forage) != n.end();
     }
-    check(boss_only, "paths: every 10th floor offers only the boss");
-    check(fight_first && saw_two && saw_three && saw_forage,
-          "paths: 2- and 3-way choices, a fight always first, forage spots appear");
-    check(rest_in_threes, "paths: 3-way choices always include a campfire (so a run can pause)");
+    check(shape && same, "map: the entrance splits, the boss is alone on top; a seed always gives the same map");
+    check(linked && reachable && uncrossed, "map: every node has a way on and a way in, and paths never cross");
+    check(first_fights && saw_forage && saw_rest, "map: the first floor is all fights; forage and rest spots appear");
+    check(saw_branch && saw_one_way, "map: some nodes branch, some only go one way");
+
+    vpet::ZoneMap m = vpet::make_zone_map(42, 0);
+    std::vector<int> row0;
+    for (int c = 0; c < vpet::kMapCols; ++c)
+        if (m.at[0][c].used) row0.push_back(c);
+    std::vector<int> ahead = vpet::map_choices(m, 2, row0[0]);
+    bool follows = !ahead.empty();
+    for (int c : ahead) follows &= (m.at[0][row0[0]].next >> c & 1) != 0;
+    check(vpet::map_choices(m, 1, -1) == row0 && vpet::map_choices(m, 11, 2) == row0 && follows &&
+              vpet::map_choices(m, 10, 1) == std::vector<int>{0},
+          "map: choices start from the whole first row and then follow the paths");
 
     vpet::Fighter a{{30, 10, 8, 5}, "", 0}, d{{30, 10, 8, 5}, "", 0};
     vpet::Hit plain = vpet::resolve_hit(pack, 12, 1.0f, a, d);
@@ -984,7 +1025,13 @@ int main(int argc, char* argv[]) {
     shot("15_quest_lobby");
     press(vpet::BTN_B);  // open the path map
     shot("15b_path_map");
-    press(vpet::BTN_A);  // the first path is always a fight
+    press(vpet::BTN_A);  // turn to another branch
+    run(250);
+    shot("15c_path_turned");
+    press(vpet::BTN_B);  // walk up: the first floor is always a fight
+    run(350);
+    shot("15d_walking");
+    run(500);
     check(pet().hunger == vpet::max_hearts(game->pack(), pet()) * 2 - 1, "entering a floor costs half a hunger heart");
     run(3000);           // intro messages auto-advance
     shot("16_battle_choose");

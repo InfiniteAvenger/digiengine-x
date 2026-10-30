@@ -33,6 +33,8 @@ struct Run {
     int best = 0;  // highest floor ever cleared
     int hp = -1;   // -1 = full
     int atk_buff = 0, def_buff = 0;  // floors remaining
+    uint32_t map_seed = 0;  // 0 = roll a new map when the run is next opened
+    int col = -1;           // map column of the last floor taken, -1 = zone entrance
 };
 
 struct Pet {

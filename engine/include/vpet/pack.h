@@ -29,7 +29,7 @@ struct EvolveRule {
     int min_quest_floor = 0;      // best floor ever cleared
 };
 
-constexpr int kMaxHeartsCap = 5;  // the most hearts any form can have
+constexpr int kMaxHeartsCap = 7;  // the most hearts any form can have
 
 // How fast a form's needs change. Timers count awake seconds only.
 struct Care {

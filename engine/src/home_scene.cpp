@@ -132,13 +132,18 @@ public:
             fb.draw_text_centered(kBottomBarY + 5, kMenu[selected_].name, t.accent);
         } else {
             // Name on the left, level and hunger on the right.
-            fb.draw_text(4, kBottomBarY + 5, s.name, t.ui_text);
+            std::string name = s.name;
             if (!egg) {
                 std::string lv = "LV" + std::to_string(pet.level);
                 int hearts = max_hearts(game_.pack(), pet), hx = kScreenW - 3 - hearts_width(hearts);
-                fb.draw_text(hx - 4 - Framebuffer::text_width(lv), kBottomBarY + 5, lv, t.accent);
+                int lx = hx - 4 - Framebuffer::text_width(lv);
+                // Big forms have many hearts: the level gives way first, then the name shortens.
+                if (4 + Framebuffer::text_width(name) + 4 > lx) lx = hx;
+                else fb.draw_text(lx, kBottomBarY + 5, lv, t.accent);
+                while (!name.empty() && 4 + Framebuffer::text_width(name) + 4 > lx) name.pop_back();
                 draw_hearts(fb, hx, kBottomBarY + 4, pet.hunger, hearts);
             }
+            fb.draw_text(4, kBottomBarY + 5, name, t.ui_text);
         }
     }
 

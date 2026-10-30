@@ -49,8 +49,8 @@ ESP32 reads straight from flash.
 
 ## Care rules (Phase 2)
 
-- **Hunger / strength:** meters grow with each stage: 1 heart as an
-  infant, 2 as a child, 3 adult, 4 perfect, 5 ultimate (packs can override). Hunger moves in half hearts, strength in
+- **Hunger / strength:** meters grow with each stage: 1 heart as a
+  baby, then one more per stage up to 7 at super ultimate (packs can override, 1-7). Hunger moves in half hearts, strength in
   whole hearts, each dropping on a per-form timer that only runs while awake.
   Kibble (free, unlimited) adds half a heart and 1g; food items add whole hearts.
   Training (stop the meter in the gold zone) adds a strength heart on a hit
@@ -68,13 +68,16 @@ ESP32 reads straight from flash.
 
 ## Quest, garden and economy
 
-- **Quest paths:** before each floor the player picks a path with A/B/C: a
-  **fight** (half a hunger heart), a **campfire** (heal 30% HP, then go on or
-  pause and go home), or a **forage** spot (materials and seeds). Every 10th
-  floor is the **boss**. Choices are 2- or 3-way; a fight is always offered,
-  a 3-way choice always includes a campfire, and a 2-way choice puts HOME on
-  C. HP carries between floors. Fainting resets the run to floor 1 and the pet
-  comes home sick, keeping its level, items and home.
+- **Quest map:** each zone of 10 floors is an overhead map. Trails wind up
+  from the entrance to the **boss** at the top, splitting and merging, so
+  some steps offer a choice (A turns, B walks) and some only go one way.
+  Nodes are a **fight** (half a hunger heart), a **campfire** (heal 30% HP),
+  or a **forage** spot (materials and seeds); the first floor is all fights
+  and the floor before the boss is often a campfire. C goes home at any
+  time and the run waits on the map. Zones cycle through biomes (meadow,
+  desert, snow, ashland). HP carries between floors. Fainting resets the run
+  to floor 1 with a new map, and the pet comes home sick, keeping its level,
+  items and home.
 - **Scaling:** enemy HP x1.12 and attack x1.09 per floor (defense and speed
   x1.06), counted from the first floor of the enemy's tier. Rare and epic
   drops gain +4% per floor, others +2%.

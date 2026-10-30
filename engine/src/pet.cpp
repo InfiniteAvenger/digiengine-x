@@ -230,6 +230,7 @@ void write_pet(std::ostringstream& o, const Pack& pack, const Pet& p, const std:
     key("bonus") << p.bonus.hp << ' ' << p.bonus.atk << ' ' << p.bonus.def << ' ' << p.bonus.spd << '\n';
     key("run") << p.run.floor << ' ' << p.run.best << ' ' << p.run.hp << ' ' << p.run.atk_buff << ' ' << p.run.def_buff
                << '\n';
+    if (p.run.map_seed) key("map") << p.run.map_seed << ' ' << p.run.col << '\n';
     if (p.frozen_ms) key("frozen") << p.frozen_ms << '\n';
     if (!p.moves.empty()) {
         key("moves");
@@ -287,6 +288,7 @@ bool read_pet(const Pack& pack, Fields& f, const std::string& prefix, Pet& out) 
     num("xp", p.xp);
     std::istringstream(get("bonus")) >> p.bonus.hp >> p.bonus.atk >> p.bonus.def >> p.bonus.spd;
     std::istringstream(get("run")) >> p.run.floor >> p.run.best >> p.run.hp >> p.run.atk_buff >> p.run.def_buff;
+    std::istringstream(get("map")) >> p.run.map_seed >> p.run.col;
     num("frozen", p.frozen_ms);
     std::stringstream moves(get("moves"));
     for (std::string id; std::getline(moves, id, ',');)

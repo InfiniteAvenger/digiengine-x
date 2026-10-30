@@ -155,12 +155,12 @@ Care default_care(Stage s) {
     switch (s) {
         case Stage::Egg:           return {0, 0, 0, 0, 0, 0, 1};
         case Stage::Baby1:         return {3 * 60, 3 * 60, 3 * 60, 20 * 60, 9 * 60, 5, 1};
-        case Stage::Baby2:         return {30 * 60, 30 * 60, 60 * 60, 20 * 60, 9 * 60, 10, 1};
-        case Stage::Child:         return {48 * 60, 48 * 60, 120 * 60, 21 * 60, 8 * 60, 20, 2};
-        case Stage::Adult:         return {59 * 60, 59 * 60, 120 * 60, 22 * 60, 8 * 60, 30, 3};
-        case Stage::Perfect:       return {66 * 60, 66 * 60, 120 * 60, 23 * 60, 9 * 60, 40, 4};
-        case Stage::Ultimate:      return {75 * 60, 75 * 60, 120 * 60, 23 * 60, 9 * 60, 50, 5};
-        case Stage::SuperUltimate: return {85 * 60, 85 * 60, 150 * 60, 23 * 60, 9 * 60, 60, 5};
+        case Stage::Baby2:         return {30 * 60, 30 * 60, 60 * 60, 20 * 60, 9 * 60, 10, 2};
+        case Stage::Child:         return {48 * 60, 48 * 60, 120 * 60, 21 * 60, 8 * 60, 20, 3};
+        case Stage::Adult:         return {59 * 60, 59 * 60, 120 * 60, 22 * 60, 8 * 60, 30, 4};
+        case Stage::Perfect:       return {66 * 60, 66 * 60, 120 * 60, 23 * 60, 9 * 60, 40, 5};
+        case Stage::Ultimate:      return {75 * 60, 75 * 60, 120 * 60, 23 * 60, 9 * 60, 50, 6};
+        case Stage::SuperUltimate: return {85 * 60, 85 * 60, 150 * 60, 23 * 60, 9 * 60, 60, 7};
     }
     return {};
 }

@@ -1,6 +1,7 @@
-// Infinite quest. Before each floor the player picks a path (A/B/C): a fight,
-// a campfire to rest or pause, a forage spot, or every 10th floor the boss.
-// HP carries between floors and going home keeps the run. Fainting ends the
+// Infinite quest. Each zone of 10 floors is an overhead map of winding paths
+// with the boss at the top; the pet walks it one floor at a time, picking a
+// branch where the path splits: a fight, a campfire to rest, or a forage
+// spot. HP carries between floors and going home keeps the run. Fainting ends the
 // run (back to floor 1) and the pet comes home sick, but keeps its level,
 // items and everything at home. The rules live in vpet/combat.h.
 #include <algorithm>
@@ -20,7 +21,58 @@ constexpr int kHorizon = 66;
 constexpr int kPanelY = 80;
 constexpr uint64_t kMessageMs = 1400;
 
-enum class Phase { Lobby, Map, Messages, Choose, Items, Mini, Cleared, Campfire, Over };
+constexpr uint64_t kWalkMs = 700;  // walking one row up the map
+
+enum class Phase { Lobby, Map, Walk, Messages, Choose, Items, Mini, Cleared, Campfire, Over };
+
+// --- Overhead map look ----------------------------------------------------------
+
+constexpr int kMapTop = 12, kMapPanelY = 102;
+constexpr int kRowGap = 22;    // pixels between floors on the map
+constexpr int kStandY = 90;    // where the pet's row sits on screen
+constexpr int kEntryRow = -1;  // the zone entrance, below the first floor
+
+// Each zone gets a biome, cycling as the run goes deeper.
+struct Biome {
+    Color ground, patch, path, path_edge, plant, plant_dark, trunk, speck;
+};
+const Biome& biome(int zone) {
+    static const Biome kBiomes[] = {
+        {rgb(0x4c, 0x9a, 0x52), rgb(0x3e, 0x86, 0x48), rgb(0xd9, 0xb8, 0x7a), rgb(0x9a, 0x7a, 0x4a),
+         rgb(0x2f, 0x6e, 0x3c), rgb(0x22, 0x52, 0x2e), rgb(0x6b, 0x4a, 0x2b), rgb(0xff, 0xcd, 0x75)},  // meadow
+        {rgb(0xd9, 0xb0, 0x6a), rgb(0xc8, 0x9c, 0x58), rgb(0xf2, 0xdc, 0xa4), rgb(0xa8, 0x82, 0x4c),
+         rgb(0x4c, 0x9a, 0x52), rgb(0x2f, 0x6e, 0x3c), rgb(0x8b, 0x6a, 0x45), rgb(0x8b, 0x6a, 0x45)},  // desert
+        {rgb(0xdc, 0xe8, 0xf0), rgb(0xc4, 0xd4, 0xe2), rgb(0xa4, 0xb8, 0xcc), rgb(0x7a, 0x8e, 0xa6),
+         rgb(0x2a, 0x6a, 0x6a), rgb(0x1e, 0x4c, 0x52), rgb(0x56, 0x4a, 0x40), rgb(0x94, 0xb0, 0xc2)},  // snow
+        {rgb(0x4a, 0x3a, 0x48), rgb(0x3c, 0x2e, 0x3c), rgb(0x86, 0x64, 0x64), rgb(0x2a, 0x20, 0x2a),
+         rgb(0x26, 0x1e, 0x28), rgb(0x1a, 0x14, 0x1c), rgb(0x26, 0x1e, 0x28), rgb(0xef, 0x7d, 0x57)},  // ashland
+    };
+    return kBiomes[zone % 4];
+}
+
+uint32_t hash3(int a, int b, uint32_t c) {
+    uint32_t h = uint32_t(a) * 374761393u + uint32_t(b) * 668265263u + c * 2246822519u;
+    h = (h ^ (h >> 13)) * 1274126177u;
+    return h ^ (h >> 16);
+}
+
+// A wide dirt path between two points.
+void draw_path(Framebuffer& fb, int x0, int y0, int x1, int y1, Color c) {
+    int steps = std::max(std::abs(x1 - x0), std::abs(y1 - y0));
+    for (int i = 0; i <= steps; ++i) {
+        int x = x0 + (x1 - x0) * i / std::max(steps, 1), y = y0 + (y1 - y0) * i / std::max(steps, 1);
+        fb.fill_rect(x - 1, y - 1, 3, 3, c);
+    }
+}
+
+// Marching dots along a path, for the ways the pet can go next.
+void draw_trail(Framebuffer& fb, int x0, int y0, int x1, int y1, Color c, uint64_t now) {
+    int steps = std::max(std::abs(x1 - x0), std::abs(y1 - y0));
+    int phase = int(now / 90) % 4;
+    for (int i = 6; i <= steps - 6; ++i)
+        if ((i + 4 - phase) % 4 == 0)
+            fb.set(x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps, c);
+}
 
 class QuestScene : public Scene {
 public:
@@ -32,12 +84,14 @@ public:
                 if (b == BTN_B) open_map();
                 else if (b == BTN_C) game_.pop();
                 break;
-            case Phase::Map: {
-                size_t pick = b == BTN_A ? 0 : b == BTN_B ? 1 : 2;
-                if (pick < nodes_.size()) take_node(nodes_[pick]);
-                else if (b == BTN_C) game_.pop();  // a two-way choice leaves C for HOME
+            case Phase::Map:
+                if (b == BTN_A) pick_ = (pick_ + 1) % int(choices_.size());
+                else if (b == BTN_B) {
+                    phase_ = Phase::Walk;
+                    walk_from_ = game_.now();
+                } else game_.pop();  // the run waits where it is
                 break;
-            }
+            case Phase::Walk: break;
             case Phase::Campfire:
                 if (b == BTN_B) open_map();
                 else if (b == BTN_C) game_.pop();
@@ -66,16 +120,36 @@ public:
     void update(uint64_t now) override {
         if (phase_ == Phase::Messages && now >= msg_until_) next_message();
         if (phase_ == Phase::Mini) mini_update(now);
+        if (phase_ == Phase::Walk && now >= walk_from_ + kWalkMs) take_node(target().type);
     }
 
     void draw(Framebuffer& fb) override;
 
 private:
+    void draw_map(Framebuffer& fb);
+
     // --- Flow -----------------------------------------------------------------
 
     void open_map() {
-        nodes_ = path_choices(game_.pet().run.floor, game_.rand());
+        Run& run = game_.pet().run;
+        if (!run.map_seed) run.map_seed = game_.rand() | 1u;  // a fresh run gets fresh maps
+        map_ = make_zone_map(run.map_seed, zone_of(run.floor));
+        choices_ = map_choices(map_, run.floor, run.col);
+        // Start the cursor on the branch straight ahead (or nearest to it).
+        pick_ = 0;
+        for (size_t i = 1; i < choices_.size(); ++i)
+            if (std::abs(choices_[i] - run.col) < std::abs(choices_[size_t(pick_)] - run.col)) pick_ = int(i);
         phase_ = Phase::Map;
+    }
+
+    int target_col() const { return choices_[size_t(pick_)]; }
+    const MapNode& target() const { return map_.at[row_of(game_.pet().run.floor)][target_col()]; }
+
+    // The floor is done: the pet now stands on the node it walked to.
+    void advance() {
+        Run& run = game_.pet().run;
+        run.col = target_col();
+        ++run.floor;
     }
 
     void take_node(Node n) {
@@ -89,7 +163,7 @@ private:
                 int hp = pet.run.hp < 0 ? st.hp : pet.run.hp;
                 int healed = std::min(st.hp, hp + st.hp * kCampfireHealPercent / 100);
                 pet.run.hp = healed;
-                ++pet.run.floor;  // resting moves the run along
+                advance();  // resting moves the run along
                 say({"A QUIET CAMPFIRE...", "+" + std::to_string(healed - hp) + " HP"}, Phase::Campfire);
                 break;
             }
@@ -99,7 +173,7 @@ private:
                     add_item(game_.home(), item, 1);
                     msgs.push_back("FOUND " + pack.items[item].name + "!");
                 }
-                ++pet.run.floor;
+                advance();
                 open_map();  // prepare the next choice, shown after the messages
                 say(msgs, Phase::Map);
                 break;
@@ -249,7 +323,7 @@ private:
         if (pet.run.atk_buff) --pet.run.atk_buff;
         if (pet.run.def_buff) --pet.run.def_buff;
         pet.run.best = std::max(pet.run.best, floor);
-        ++pet.run.floor;
+        advance();
         ps_ = pet_stats(pack, pet);  // a level-up raises max HP
         game_.sfx(Game::Sfx::Clear);
         say(msgs, Phase::Cleared);
@@ -286,7 +360,10 @@ private:
     std::deque<std::string> queue_;
     uint64_t msg_until_ = 0;
 
-    std::vector<Node> nodes_;  // the path choices for the next floor
+    ZoneMap map_;               // the current zone
+    std::vector<int> choices_;  // columns the pet can walk to next
+    int pick_ = 0;              // index into choices_
+    uint64_t walk_from_ = 0;
     int enemy_ = -1;
     bool boss_ = false;
     Stats es_, ps_;
@@ -305,6 +382,7 @@ void QuestScene::draw(Framebuffer& fb) {
     Color dim = mix(t.ui, t.ui_text, 50);
     Stats ps = pet_stats(pack, pet);
     int hp = pet.run.hp < 0 ? ps.hp : pet.run.hp;
+    if (phase_ == Phase::Map || phase_ == Phase::Walk) return draw_map(fb);
 
     draw_scenery(fb, t, kArenaTop, kHorizon, kPanelY, now, game_.local_minute(), false);
 
@@ -350,26 +428,8 @@ void QuestScene::draw(Framebuffer& fb) {
             fb.draw_text(6, y + 18, "LOSE AND THE RUN RESETS", dim);
             draw_footer(fb, t, "B: ENTER  C: HOME");
             break;
-        case Phase::Map: {
-            fb.draw_text(4, y - 2, "FLOOR " + std::to_string(pet.run.floor) + ": PICK A PATH", t.accent);
-            // One card per choice; a two-way choice adds HOME on C.
-            const int kCardW = 36, kCardY = y + 6, kCardH = 28;
-            for (int i = 0; i < 3; ++i) {
-                bool home = i >= int(nodes_.size());
-                if (home && (i != 2 || nodes_.size() == 3)) continue;
-                int frame = home ? 4 : int(nodes_[size_t(i)]);
-                const char* label = home ? "HOME" : node_label(nodes_[size_t(i)]);
-                bool boss = !home && nodes_[size_t(i)] == Node::Boss;
-                int x = 3 + i * (kCardW + 3);
-                fb.panel(x, kCardY, kCardW, kCardH, mix(t.ui, t.ui_text, 16), boss ? t.accent : mix(t.ui, t.ui_text, 45));
-                fb.panel(x + 2, kCardY + 2, 7, 8, t.accent, mix(t.accent, rgb(0, 0, 0), 80));
-                fb.draw_text(x + 4, kCardY + 3, std::string(1, char('A' + i)), t.ui);
-                fb.draw_icon(icons().nodes, frame, x + (kCardW - 9) / 2, kCardY + 7, t.ui);
-                fb.draw_text(x + (kCardW - Framebuffer::text_width(label)) / 2, kCardY + 19, label,
-                             boss ? t.accent : mix(t.ui_text, t.ui, 30));
-            }
-            break;
-        }
+        case Phase::Map:
+        case Phase::Walk: break;  // drawn by draw_map
         case Phase::Campfire:
             fb.draw_text_centered(y + 2, "RESTED BY THE FIRE", t.accent);
             fb.draw_text_centered(y + 12, "HP " + std::to_string(hp) + "/" + std::to_string(ps.hp), t.ui_text);
@@ -426,6 +486,143 @@ void QuestScene::draw(Framebuffer& fb) {
             draw_footer(fb, t, "ANY BUTTON: HOME");
             break;
     }
+}
+
+// The zone seen from above: floors run bottom to top, the pet stands on the
+// node it last cleared, and the map scrolls up a row as it walks on.
+void QuestScene::draw_map(Framebuffer& fb) {
+    const Pack& pack = game_.pack();
+    const Theme& t = pack.theme;
+    const Pet& pet = game_.pet();
+    const Sprite& pet_sprite = game_.species().sprite;
+    uint64_t now = game_.now();
+    const int floor = pet.run.floor, zone = zone_of(floor), row = row_of(floor);
+    const int stand = row == 0 ? kEntryRow : row - 1;
+    const Biome& b = biome(zone);
+    const uint32_t seed = pet.run.map_seed;
+
+    // Walking slides the view up one row.
+    int walked = phase_ == Phase::Walk ? int(std::min<uint64_t>(now - walk_from_, kWalkMs) * kRowGap / kWalkMs) : 0;
+    int scroll = stand * kRowGap + walked;  // world y = screen y - scroll
+    auto row_y = [&](int r) { return kStandY - r * kRowGap + scroll; };
+    auto node_x = [&](int r, int c) {
+        if (r == kEntryRow || r == kBossEvery - 1) return kScreenW / 2;
+        return 15 + c * 30 + int(hash3(r, c, seed) % 7) - 3;
+    };
+    int stand_col = stand == kEntryRow ? 0 : pet.run.col >= 0 ? pet.run.col : choices_.empty() ? 0 : choices_[0];
+
+    // Ground: soft patches, then plants and specks, skipping the nodes.
+    for (int y = kMapTop; y < kMapPanelY; ++y) {
+        int wy = y - scroll;
+        for (int x = 0; x < kScreenW; ++x) {
+            uint32_t h = hash3(x / 6, (wy + 600) / 6, seed);
+            bool patch = h % 5 == 0 && ((x + y) & 1);
+            fb.set(x, y, patch ? b.patch : b.ground);
+        }
+    }
+    auto near_node = [&](int x, int wy) {
+        for (int r = 0; r < kBossEvery; ++r)
+            for (int c = 0; c < kMapCols; ++c)
+                if (map_.at[r][c].used && std::abs(x - node_x(r, c)) < 11 &&
+                    std::abs(wy - (kStandY - r * kRowGap)) < 11)
+                    return true;
+        return std::abs(x - kScreenW / 2) < 9 && std::abs(wy - (kStandY - kEntryRow * kRowGap)) < 9;
+    };
+    for (int cy = (kMapTop - scroll) / 10 - 1; cy * 10 < kMapPanelY - scroll + 10; ++cy) {
+        for (int cx = 0; cx < kScreenW / 10; ++cx) {
+            uint32_t h = hash3(cx + 100, cy + 1000, seed ^ 0x5bd1e995u);
+            int x = cx * 10 + int(h >> 8) % 7, wy = cy * 10 + int(h >> 12) % 7, y = wy + scroll;
+            if (near_node(x, wy)) continue;
+            if (h % 6 == 0) {  // a tree, cactus or pine: a rounded top on a short trunk
+                fb.fill_rect(x - 1, y - 3, 3, 1, b.plant);
+                fb.fill_rect(x - 2, y - 2, 5, 2, b.plant);
+                fb.fill_rect(x, y - 2, 2, 2, b.plant_dark);
+                fb.fill_rect(x - 1, y, 3, 1, b.plant_dark);
+                fb.set(x, y + 1, b.trunk);
+            } else if (h % 6 == 1) {
+                fb.set(x, y, b.speck);
+                fb.set(x + 3, y + 2, b.speck);
+            }
+        }
+    }
+
+    // Paths: edges first, then the ways the pet can go next as moving dots.
+    const int last = kBossEvery - 1;
+    for (int r = 0; r < last; ++r)
+        for (int c = 0; c < kMapCols; ++c)
+            for (int n = 0; n < kMapCols; ++n)
+                if (map_.at[r][c].used && (map_.at[r][c].next >> n & 1))
+                    draw_path(fb, node_x(r, c), row_y(r), node_x(r + 1, n), row_y(r + 1), r < stand ? b.path_edge : b.path);
+    for (int c = 0; c < kMapCols; ++c)
+        if (map_.at[0][c].used)
+            draw_path(fb, node_x(kEntryRow, 0), row_y(kEntryRow), node_x(0, c), row_y(0), row == 0 ? b.path : b.path_edge);
+    int sx = node_x(stand, stand_col), sy = row_y(stand);
+    for (size_t i = 0; i < choices_.size(); ++i) {
+        bool sel = int(i) == pick_;
+        if (phase_ == Phase::Walk && !sel) continue;
+        if (sel) draw_path(fb, sx, sy, node_x(row, choices_[i]), row_y(row), t.accent);
+        draw_trail(fb, sx, sy, node_x(row, choices_[i]), row_y(row), sel ? t.ui : b.path_edge, now);
+    }
+
+    // Nodes: past rows faded, the boss ringed, the chosen one bracketed.
+    for (int r = 0; r <= last; ++r) {
+        int y = row_y(r);
+        if (y < kMapTop - 8 || y > kMapPanelY + 8) continue;
+        for (int c = 0; c < kMapCols; ++c) {
+            const MapNode& n = map_.at[r][c];
+            if (!n.used) continue;
+            int x = node_x(r, c);
+            fb.fill_rect(x - 4, y + 5, 9, 1, b.patch);  // a little shadow
+            if (n.type == Node::Boss && (now / 400) % 2) fb.rect(x - 7, y - 7, 15, 15, t.accent);
+            fb.draw_icon(icons().nodes, int(n.type), x - 4, y - 4, t.ui, b.ground, r <= stand ? 140 : 0);
+        }
+    }
+    if (!choices_.empty() && phase_ == Phase::Map && (now / 300) % 2) {
+        int x = node_x(row, target_col()), y = row_y(row);
+        for (int dx : {-7, 5})
+            for (int dy : {-7, 5}) {
+                fb.fill_rect(x + dx, y + dy, 3, 1, t.accent);
+                fb.fill_rect(x + (dx < 0 ? dx : dx + 2), y + dy + (dy < 0 ? 0 : -1), 1, 2, t.accent);
+            }
+    }
+
+    // The pet, standing on its node or walking up the path.
+    if (pet_sprite.valid()) {
+        int tx = choices_.empty() ? sx : node_x(row, target_col()), ty = row_y(row);
+        int px = sx, py = sy;
+        if (phase_ == Phase::Walk) {
+            int dt = int(std::min<uint64_t>(now - walk_from_, kWalkMs));
+            px = sx + (tx - sx) * dt / int(kWalkMs);
+            py = sy + (ty - sy) * dt / int(kWalkMs);
+        }
+        int frame = phase_ == Phase::Walk ? int(now / 150) % 2 : int(now / 350) % 2;
+        fb.draw_sprite(pet_sprite, frame, px - pet_sprite.w / 2, py - pet_sprite.h + 4 - (frame && phase_ == Phase::Walk),
+                       1, tx > sx);  // sprites face left
+    }
+
+    // Top bar: the floor and how far the boss is.
+    fb.fill_rect(0, 0, kScreenW, kMapTop, t.ui);
+    fb.fill_rect(0, kMapTop - 1, kScreenW, 1, mix(t.ui, t.accent, 60));
+    fb.draw_text(4, 3, "ZONE " + std::to_string(zone + 1) + "  FLOOR " + std::to_string(floor), t.accent);
+    int to_boss = last - row;
+    std::string boss = to_boss == 0 ? "BOSS!" : "BOSS IN " + std::to_string(to_boss);
+    fb.draw_text(kScreenW - 4 - Framebuffer::text_width(boss), 3, boss, to_boss == 0 ? t.accent : t.ui_text);
+
+    // Bottom panel: where the chosen path leads, HP, and the buttons.
+    Stats ps = pet_stats(pack, pet);
+    int hp = pet.run.hp < 0 ? ps.hp : pet.run.hp;
+    fb.fill_rect(0, kMapPanelY, kScreenW, kScreenH - kMapPanelY, t.ui);
+    fb.fill_rect(0, kMapPanelY, kScreenW, 1, mix(t.ui, t.accent, 60));
+    if (!choices_.empty()) {
+        std::string label = node_label(target().type);
+        if (choices_.size() == 1) label += "  ONE WAY";
+        fb.draw_text(4, kMapPanelY + 4, label, t.accent);
+    }
+    std::string hp_text = "HP " + std::to_string(hp) + "/" + std::to_string(ps.hp);
+    fb.draw_text(kScreenW - 4 - Framebuffer::text_width(hp_text), kMapPanelY + 4, hp_text, t.ui_text);
+    if (phase_ == Phase::Map)
+        fb.draw_text(4, kMapPanelY + 11, choices_.size() > 1 ? "A: TURN  B: GO  C: HOME" : "B: GO  C: HOME",
+                     mix(t.ui, t.ui_text, 150));
 }
 
 }  // namespace
