@@ -54,8 +54,9 @@ struct ZoneMap {
 inline int zone_of(int floor) { return (floor - 1) / kBossEvery; }
 inline int row_of(int floor) { return (floor - 1) % kBossEvery; }
 
-// Rows have 1-4 nodes (only the boss on the last), the first row at least 2,
-// all battles. Every node is reachable, and no two paths cross.
+// Rows have 1-4 nodes (only the boss on the last), the first row at least 2.
+// Every node is reachable and no two paths cross. Node types follow the
+// rhythm described in make_zone_map (no back-to-back rests or forages).
 ZoneMap make_zone_map(uint32_t seed, int zone);
 
 // Columns the pet can move to for `floor`, standing at column `col` of the

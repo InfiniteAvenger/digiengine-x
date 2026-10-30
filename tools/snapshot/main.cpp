@@ -15,6 +15,7 @@
 #include "vpet/combat.h"
 #include "vpet/game.h"
 #include "baker.h"
+#include "shell.h"
 #include "vpet/minigame.h"
 #include "vpet/png.h"
 #include "vpet/rpg.h"
@@ -63,8 +64,9 @@ public:
     }
 };
 
-void write_bmp(const std::string& path, const vpet::Framebuffer& fb, int scale = 4) {
-    const int w = vpet::kScreenW * scale, h = vpet::kScreenH * scale;
+// Any RGB565 image, scaled up by whole pixels (w * scale must be a multiple of 4).
+void write_bmp(const std::string& path, const vpet::Color* px, int pw, int ph, int scale = 4) {
+    const int w = pw * scale, h = ph * scale;
     const int row = w * 3;  // multiple of 4 because w is
     const uint32_t size = 54 + uint32_t(row * h);
     unsigned char hdr[54] = {'B', 'M'};
@@ -81,13 +83,17 @@ void write_bmp(const std::string& path, const vpet::Framebuffer& fb, int scale =
     std::string line(size_t(row), '\0');
     for (int y = h - 1; y >= 0; --y) {
         for (int x = 0; x < w; ++x) {
-            vpet::Color c = fb.pixels()[(y / scale) * vpet::kScreenW + x / scale];
+            vpet::Color c = px[(y / scale) * pw + x / scale];
             line[size_t(x * 3 + 0)] = char((c & 0x1F) << 3);
             line[size_t(x * 3 + 1)] = char(((c >> 5) & 0x3F) << 2);
             line[size_t(x * 3 + 2)] = char((c >> 11) << 3);
         }
         f.write(line.data(), row);
     }
+}
+
+void write_bmp(const std::string& path, const vpet::Framebuffer& fb, int scale = 4) {
+    write_bmp(path, fb.pixels(), vpet::kScreenW, vpet::kScreenH, scale);
 }
 
 int failures = 0;
@@ -639,6 +645,30 @@ void combat_checks(FakePlatform& p, const std::string& demo_dir) {
     check(first_fights && saw_forage && saw_rest, "map: the first floor is all fights; forage and rest spots appear");
     check(saw_branch && saw_one_way, "map: some nodes branch, some only go one way");
 
+    // Node rhythm: breaks never back to back, one per floor at most, no early
+    // rests, the floor before the boss all campfires and the one before that all fights.
+    bool rhythm = true;
+    for (uint32_t seed = 1; seed < 300; ++seed) {
+        vpet::ZoneMap rm = vpet::make_zone_map(seed * 40503u, int(seed % 5));
+        for (int r = 0; r < last; ++r) {
+            int specials = 0;
+            for (int c = 0; c < vpet::kMapCols; ++c) {
+                const vpet::MapNode& n = rm.at[r][c];
+                if (!n.used) continue;
+                bool brk = n.type != vpet::Node::Battle;
+                if (r == last - 1) rhythm &= n.type == vpet::Node::Campfire;
+                else if (r == last - 2 || r == 0) rhythm &= !brk;
+                else specials += brk;
+                if (n.type == vpet::Node::Campfire && r < last - 1) rhythm &= r >= 3;
+                if (brk && r < last - 1)
+                    for (int d = 0; d < vpet::kMapCols; ++d)
+                        if (n.next >> d & 1) rhythm &= rm.at[r + 1][d].type == vpet::Node::Battle || r + 1 == last - 1;
+            }
+            rhythm &= specials <= 1;
+        }
+    }
+    check(rhythm, "map: rests and forages never back to back, one per floor, a fight before the boss's campfires");
+
     vpet::ZoneMap m = vpet::make_zone_map(42, 0);
     std::vector<int> row0;
     for (int c = 0; c < vpet::kMapCols; ++c)
@@ -1102,6 +1132,14 @@ int main(int argc, char* argv[]) {
           "level, run, inventory and garden survive a reload");
     run(500);
     shot("21_home_day");
+    {
+        vpet::Shell shell;  // the PC/Android handheld frame, with B held down
+        shell.compose(p.last, vpet::BTN_B);
+        write_bmp(out + "/21b_shell.bmp", shell.pixels(), vpet::kShellW, vpet::kShellH);
+        check(vpet::Shell::button_at(180, 50) == vpet::BTN_A && vpet::Shell::button_at(180, 82) == vpet::BTN_B &&
+                  vpet::Shell::button_at(180, 114) == vpet::BTN_C && vpet::Shell::button_at(60, 60) == 0,
+              "shell: the three buttons sit right of the screen; the screen itself is not a button");
+    }
     select(8);
     run(400);
     shot("23_menu_cryo_selected");

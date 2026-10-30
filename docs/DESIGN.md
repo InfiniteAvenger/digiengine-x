@@ -72,8 +72,11 @@ ESP32 reads straight from flash.
   from the entrance to the **boss** at the top, splitting and merging, so
   some steps offer a choice (A turns, B walks) and some only go one way.
   Nodes are a **fight** (half a hunger heart), a **campfire** (heal 30% HP),
-  or a **forage** spot (materials and seeds); the first floor is all fights
-  and the floor before the boss is often a campfire. C goes home at any
+  or a **forage** spot (materials and seeds). Nodes follow an RPG rhythm:
+  the first floor is all fights, then at most one forage or campfire per
+  floor (campfires from floor 4), a break is always followed by a fight,
+  the floor before the boss is all campfires and the one before that all
+  fights. C goes home at any
   time and the run waits on the map. Zones cycle through biomes (meadow,
   desert, snow, ashland). HP carries between floors. Fainting resets the run
   to floor 1 with a new map, and the pet comes home sick, keeping its level,

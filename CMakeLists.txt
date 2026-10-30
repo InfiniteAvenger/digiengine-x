@@ -43,9 +43,14 @@ if(MINGW)
     target_link_options(vpet_baker PRIVATE -static)
 endif()
 
+# The handheld frame (screen bezel and touch buttons) drawn by PC and Android.
+add_library(vpet_shell STATIC platform/shell/shell.cpp)
+target_link_libraries(vpet_shell PUBLIC vpet_engine)
+target_include_directories(vpet_shell PUBLIC platform/shell PRIVATE engine/src)
+
 # Headless screenshot runner for checking screens without a window.
 add_executable(vpet_snapshot tools/snapshot/main.cpp)
-target_link_libraries(vpet_snapshot PRIVATE vpet_engine vpet_baker_lib)
+target_link_libraries(vpet_snapshot PRIVATE vpet_engine vpet_baker_lib vpet_shell)
 if(MINGW)
     target_link_options(vpet_snapshot PRIVATE -static)
 endif()
@@ -55,7 +60,7 @@ if(VPET_BUILD_SDL)
     find_package(SDL2 REQUIRED CONFIG)
     # WIN32: a normal windowed app on Windows, with no console window.
     add_executable(vpet WIN32 platform/sdl/main.cpp)
-    target_link_libraries(vpet PRIVATE vpet_engine SDL2::SDL2main SDL2::SDL2)
+    target_link_libraries(vpet PRIVATE vpet_engine vpet_shell SDL2::SDL2main SDL2::SDL2)
     if(MINGW)
         # Bundle the GCC runtime so the .exe runs outside the MSYS2 shell.
         target_link_options(vpet PRIVATE -static-libgcc -static-libstdc++ -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic)

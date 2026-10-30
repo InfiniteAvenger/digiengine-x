@@ -60,13 +60,32 @@ ZoneMap make_zone_map(uint32_t seed, int zone) {
             m.at[row][was[i]].next |= uint8_t(1 << pos[i]);
         }
     }
-    for (int row = 0; row < last; ++row)
-        for (MapNode& n : m.at[row]) {
+    // Node types follow a simple RPG rhythm: the zone opens with fights, the
+    // floor before the boss is all campfires, and in between most nodes are
+    // fights. A floor has at most one forage spot or campfire, campfires only
+    // come mid-zone, and a break is always followed by a fight, so rests and
+    // forages never come back to back.
+    for (int row = 0; row < last; ++row) {
+        bool special_in_row = false;
+        for (int c = 0; c < kMapCols; ++c) {
+            MapNode& n = m.at[row][c];
+            n.type = Node::Battle;
+            if (!n.used || row == 0) continue;
+            if (row == last - 1) {
+                n.type = Node::Campfire;
+                continue;
+            }
+            bool after_break = false;  // reached straight from a forage or campfire
+            for (int p = 0; p < kMapCols; ++p)
+                if (m.at[row - 1][p].used && (m.at[row - 1][p].next >> c & 1) && m.at[row - 1][p].type != Node::Battle)
+                    after_break = true;
             uint32_t roll = next() % 100;
-            if (row == 0) n.type = Node::Battle;
-            else if (row == last - 1) n.type = roll < 45 ? Node::Campfire : Node::Battle;  // a rest before the boss
-            else n.type = roll < 55 ? Node::Battle : roll < 78 ? Node::Forage : Node::Campfire;
+            if (special_in_row || after_break || roll >= 40 || row > last - 3) continue;
+            bool mid_zone = row >= 3;  // no rest in the first few floors
+            n.type = mid_zone && roll < 15 ? Node::Campfire : Node::Forage;
+            special_in_row = true;
         }
+    }
     m.at[last][0] = MapNode{true, Node::Boss, 0};
     return m;
 }
