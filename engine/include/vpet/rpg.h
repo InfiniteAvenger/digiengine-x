@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -68,18 +69,20 @@ int damage(int power, float mult, int atk, int def);
 // 0.75 if the reverse, else 1.
 float attribute_mult(const Pack& pack, const std::string& attacker, const std::string& defender);
 uint32_t floor_xp(int floor);
-// Rolls each drop; `rng` is called once per drop and must return 0..9999.
-// Deeper floors drop more: +2% per floor, and +4% for rare and epic items.
+// Gives at most one item. Drops are rolled from the least likely up and the
+// first hit wins, so rare items keep their full chance. `rng` must return
+// 0..9999. Deeper floors drop more: +2% per floor, and +4% for rare and epic.
 template <typename Rng>
 std::vector<int> roll_drops(const Pack& pack, const Enemy& e, int floor, Rng rng) {
-    std::vector<int> got;
-    for (const Drop& d : e.drops) {
+    std::vector<Drop> order = e.drops;
+    std::stable_sort(order.begin(), order.end(), [](const Drop& a, const Drop& b) { return a.chance < b.chance; });
+    for (const Drop& d : order) {
         Rarity r = pack.items[d.item].rarity;
         float per_floor = r == Rarity::Rare || r == Rarity::Epic ? 0.04f : 0.02f;
         float bonus = 1.0f + per_floor * float(floor);
-        if (float(rng() % 10000) < d.chance * bonus * 10000.0f) got.push_back(d.item);
+        if (float(rng() % 10000) < d.chance * bonus * 10000.0f) return {d.item};
     }
-    return got;
+    return {};
 }
 
 }  // namespace vpet

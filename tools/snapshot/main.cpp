@@ -659,9 +659,20 @@ void combat_checks(FakePlatform& p, const std::string& demo_dir) {
     check(vpet::pet_moves_first({1, 1, 1, 5}, {1, 1, 1, 5}) && !vpet::pet_moves_first({1, 1, 1, 4}, {1, 1, 1, 5}),
           "combat: faster acts first; ties go to the pet");
 
-    bool always_found = true;
-    for (uint32_t s = 1; s < 50; ++s) always_found &= !vpet::forage(pack, 1, s * 7919u).empty();
-    check(always_found, "forage: always finds at least one thing");
+    bool always_one = true;
+    for (uint32_t s = 1; s < 50; ++s) always_one &= vpet::forage(pack, 30, s * 7919u).size() == 1;
+    check(always_one, "forage: always finds exactly one thing, even deep down");
+
+    // A boss with every drop certain still gives one item, and the rarest wins.
+    vpet::Enemy loaded;
+    int rarest = -1;
+    for (size_t i = 0; i < pack.items.size() && loaded.drops.size() < 4; ++i) {
+        loaded.drops.push_back({int(i), 1.0f - 0.2f * float(loaded.drops.size())});
+        rarest = int(i);
+    }
+    uint32_t seq = 0;
+    std::vector<int> got = vpet::roll_drops(pack, loaded, 50, [&seq] { return seq++; });
+    check(got.size() == 1 && got[0] == rarest, "drops: a fight gives at most one item, rolled rarest first");
 
     vpet::Minigame die;
     bool faces_ok = true;

@@ -102,9 +102,10 @@ Enemies use moves too; for them `game` is ignored.
 ```
 
 Stats are for floor 1 and grow 15% per floor. Every 10th floor uses a `boss`
-enemy (with +50% HP). Drop chances rise 2% per floor. Make drops fit the
-creature: beasts drop meat and hide, machines drop scrap and circuits, plants
-drop vines and seeds.
+enemy (with +50% HP). Drop chances rise 2% per floor. A fight gives at most
+one item: drops are rolled from the least likely up and the first hit wins.
+Make drops fit the creature: beasts drop meat and hide, machines drop scrap
+and circuits, plants drop vines and seeds.
 
 ## materials and items
 

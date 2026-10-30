@@ -80,7 +80,8 @@ ESP32 reads straight from flash.
   items and home.
 - **Scaling:** enemy HP x1.12 and attack x1.09 per floor (defense and speed
   x1.06), counted from the first floor of the enemy's tier. Rare and epic
-  drops gain +4% per floor, others +2%.
+  drops gain +4% per floor, others +2%. A fight drops at most one item and
+  a forage spot always gives exactly one (rarest rolled first).
 - **Dice:** a 7-sided die; 1-2 glance off (x0.5, x0.6), 6-7 are critical
   (x1.5). Minigame names `precision_slider`, `rapid_mash`,
   `command_sequence` and `dice_gamble` also work in packs.

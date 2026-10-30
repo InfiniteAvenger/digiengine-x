@@ -96,7 +96,19 @@ std::vector<int> forage(const Pack& pack, int floor, uint32_t seed) {
     Enemy source;
     source.drops = table;
     std::vector<int> found = roll_drops(pack, source, floor, next);
-    if (found.empty()) found.push_back(table[next() % table.size()].item);
+    if (found.empty()) {  // nothing hit: pick one by the table's odds
+        float total = 0;
+        for (const Drop& d : table) total += d.chance;
+        float pick = float(next() % 10000) / 10000.0f * total;
+        found.push_back(table.back().item);
+        for (const Drop& d : table) {
+            if (pick < d.chance) {
+                found.back() = d.item;
+                break;
+            }
+            pick -= d.chance;
+        }
+    }
     return found;
 }
 

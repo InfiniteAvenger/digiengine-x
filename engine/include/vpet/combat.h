@@ -65,7 +65,7 @@ std::vector<int> map_choices(const ZoneMap& map, int floor, int col);
 constexpr int kCampfireHealPercent = 30;
 
 // Forage: rolls the pack's "forage" table (or every family table if none),
-// deeper floors finding more. Always finds at least one thing.
+// deeper floors finding rarer things. Always finds exactly one thing.
 std::vector<int> forage(const Pack& pack, int floor, uint32_t seed);
 
 }  // namespace vpet
