@@ -913,6 +913,8 @@ int main(int argc, char* argv[]) {
     shot("05_status_p2");
     press(vpet::BTN_A);
     shot("06_status_p3");
+    press(vpet::BTN_A);
+    shot("06b_status_p4");
     press(vpet::BTN_C);
 
     std::printf("neglect for 80 minutes (catch-up)\n");

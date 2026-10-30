@@ -103,15 +103,15 @@ n 8b5a2b
 l b8865b
 d 5d3a1f
 frame
-.......hh
-.......he
-....yy.he
-....ya.he
-.oo.ya.he
-.om.ya.he
-.om.ya.he
+.......ww
+.......ww
+....ww.ww
+....ww.ww
+.ww.ww.ww
+.ww.ww.ww
+.ww.ww.ww
 .........
-sssssssss
+wwwwwwwww
 frame
 ....n.hh.
 ....nhh..

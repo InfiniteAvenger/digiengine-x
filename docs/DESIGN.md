@@ -131,7 +131,7 @@ ESP32 reads straight from flash.
 - **Pack:** every folder in `packs/` is a pack; switching saves the current one,
   and each pack keeps its own save. The last pack used opens on launch.
 - **Version:** a pack's `rosters`; new eggs hatch from the chosen one.
-- **Moves:** equip any 1-3 learned moves (also from Status page 4). With
+- **Moves:** equip any 1-3 learned moves (also from the Status BATTLE page). With
   hand-picked moves and a free slot, newly learned moves are equipped too.
 - **Debug** (temporary, for testing): evolve to a chosen next form, devolve
   to an earlier one, wake a sleeping pet for 2 hours, fill hearts, heal and

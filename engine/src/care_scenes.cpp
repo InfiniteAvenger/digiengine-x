@@ -142,7 +142,7 @@ namespace {
 constexpr int kLabelX = 6;
 constexpr int kValueX = 48;
 
-// --- Status: three pages, nothing hidden ------------------------------------
+// --- Status: an overview, then life, battle and timer details -----------------
 
 class StatusScene : public Scene {
 public:
@@ -150,117 +150,209 @@ public:
 
     void on_press(Button b) override {
         if (b == BTN_A) page_ = (page_ + 1) % kPages;
-        else if (b == BTN_B && page_ == 3 && game_.species().stage != Stage::Egg) game_.push(make_moves_scene(game_));
+        else if (b == BTN_B && page_ == kBattlePage && game_.species().stage != Stage::Egg)
+            game_.push(make_moves_scene(game_));
         else game_.pop();
-
     }
 
     void draw(Framebuffer& fb) override {
+        static const char* const kTitles[kPages] = {"STATUS", "LIFE", "BATTLE", "TIMERS"};
         const Theme& t = game_.pack().theme;
-        const Species& s = game_.species();
-        const Pet& pet = game_.pet();
-        uint64_t now = game_.now();
-        auto since = [&](uint64_t then) { return format_duration(now > then ? now - then : 0); };
-        auto row = [&](int y, const char* label, const std::string& value) {
-            fb.draw_text(kLabelX, y, label, t.accent);
-            fb.draw_text(kValueX, y, value, t.ui_text);
-        };
-
-        draw_title(fb, t, "STATUS");
+        draw_title(fb, t, kTitles[page_]);
         draw_page_dots(fb, t, page_, kPages);
-        draw_card(fb, t, 2, 14, kScreenW - 4, 93);
-
-        if (page_ == 0) {
-            row(18, "NAME", s.name);
-            if (pet.forever)  // Forever Partner badge after the name
-                fb.draw_sprite(icons().forever, 0, kValueX + Framebuffer::text_width(s.name) + 3, 18);
-            row(27, "STAGE", stage_label(s.stage));
-            row(36, "AGE", since(pet.born_ms));
-            row(45, "IN FORM", since(pet.stage_ms));
-            row(54, "WEIGHT", std::to_string(pet.weight) + "G");
-            if (!s.evolve.empty()) {
-                // Earliest any branch could happen; past that, it is waiting on conditions.
-                uint64_t due = UINT64_MAX;
-                for (const EvolveRule& r : s.evolve) due = std::min(due, pet.stage_ms + uint64_t(r.after_seconds) * 1000);
-                row(63, "NEXT FORM", due > now ? format_duration(due - now) : "NEEDS MORE");
-            }
-            std::optional<uint64_t> life = lifespan_left_ms(game_.pack(), pet, now);
-            if (pet.forever) row(72, "LIFESPAN", "FOREVER");
-            else if (life) row(72, "LIFESPAN", format_duration(*life) + " LEFT");
-            // Portrait in a little framed window with a sky-and-grass backdrop.
-            int px = kScreenW - 40, py = 16;
-            fb.panel(px, py, 36, 36, t.bg_top, mix(t.ui, t.accent, 120));
-            fb.fill_rect(px + 1, py + 1, 34, 12, mix(t.bg_top, rgb(0xff, 0xff, 0xff), 70));
-            fb.fill_rect(px + 1, py + 27, 34, 8, t.bg_bottom);
-            fb.fill_rect(px + 1, py + 27, 34, 1, mix(t.bg_bottom, rgb(0xff, 0xff, 0xff), 60));
-            fb.draw_sprite(s.sprite, 0, px + 2, py + 2, 2);
-        } else if (page_ == 1) {
-            fb.draw_text(kLabelX, 19, "HUNGER", t.accent);
-            draw_hearts(fb, kValueX, 18, pet.hunger, max_hearts(game_.pack(), pet));
-            fb.draw_text(kLabelX, 29, "STRENGTH", t.accent);
-            draw_hearts(fb, kValueX, 28, pet.strength * 2, max_hearts(game_.pack(), pet));
-            row(40, "POOP", std::to_string(pet.poop) + "/" + std::to_string(kMaxPoop));
-            row(49, "SICK", pet.sick ? "YES" : "NO");
-            row(58, "SLEEPING", pet.asleep ? "YES" : "NO");
-            row(67, "LIGHTS", pet.lights_on ? "ON" : "OFF");
-            row(76, "MISTAKES", std::to_string(pet.care_mistakes) + " (" + std::to_string(pet.stage_mistakes) + " NOW)");
-            row(85, "TRAINED", std::to_string(pet.trainings) + "X EFFORT " + std::to_string(pet.effort));
-        } else if (page_ == 3) {
-            const Pack& pack = game_.pack();
-            Stats st = pet_stats(pack, pet);
-            row(18, "LEVEL", std::to_string(pet.level));
-            row(27, "XP", std::to_string(pet.xp) + "/" + std::to_string(xp_to_next(pet.level)));
-            row(36, "HP", std::to_string(st.hp));
-            row(45, "ATK DEF", std::to_string(st.atk) + "  " + std::to_string(st.def));
-            row(54, "SPD", std::to_string(st.spd));
-            std::string attr = s.attribute.empty() ? "-" : s.attribute;
-            for (char& c : attr) c = char(toupper(static_cast<unsigned char>(c)));
-            row(63, "ATTRIBUTE", attr);
-            row(72, "BEST FLOOR", std::to_string(pet.run.best));
-            int y = 82;
-            fb.draw_text(kLabelX, y, "MOVES", t.accent);
-            for (int m : equipped_moves(pack, pet)) {
-                fb.draw_text(kValueX, y, pack.moves[m].name, t.ui_text);
-                y += 8;
-            }
-        } else {
-            // Exact timers: when each need changes next and how long until an
-            // open call becomes a care mistake.
-            const Care& c = s.care;
-            auto left = [](uint32_t total, uint32_t done) { return format_duration(uint64_t(total - done) * 1000); };
-            if (s.stage == Stage::Egg) {
-                row(18, "CARE", "NONE YET");
-            } else {
-                const char* paused = pet.asleep ? "PAUSED" : nullptr;
-                row(18, "HUNGER -1", paused ? paused : left(c.hunger_s, pet.hunger_s));
-                row(27, "STRENGTH-1", paused ? paused : left(c.strength_s, pet.strength_s));
-                row(36, "NEXT POOP", paused ? paused : left(c.poop_s, pet.poop_s));
-                char clock[16];
-                std::snprintf(clock, sizeof clock, "%02d:%02d-%02d:%02d", c.sleep_min / 60, c.sleep_min % 60,
-                              c.wake_min / 60, c.wake_min % 60);
-                row(45, "BEDTIME", c.sleep_min == c.wake_min ? "NEVER" : clock);
-            }
-            int y = 58;
-            fb.draw_text(kLabelX, y, "CALLS", t.accent);
-            bool any = false;
-            auto call = [&](const char* name, const Call& cl) {
-                if (!cl.active()) return;
-                uint64_t deadline = cl.since_ms + uint64_t(kCallTimeoutS) * 1000;
-                y += 9;
-                row(y, name, deadline > now ? format_duration(deadline - now) : "NOW");
-                any = true;
-            };
-            call(" HUNGER", pet.hunger_call);
-            call(" STRENGTH", pet.strength_call);
-            call(" LIGHTS", pet.lights_call);
-            if (!any) fb.draw_text(kValueX, y, "NONE", t.ui_text);
+        switch (page_) {
+            case 0: draw_overview(fb, t); break;
+            case 1: draw_life(fb, t); break;
+            case kBattlePage: draw_battle(fb, t); break;
+            default: draw_timers(fb, t); break;
         }
-
-        draw_footer(fb, t, page_ == 3 ? "A: NEXT B: MOVES C: BACK" : "A: NEXT  C: BACK");
+        draw_footer(fb, t, page_ == kBattlePage ? "A: NEXT B: MOVES C: BACK" : "A: NEXT  C: BACK");
     }
 
 private:
-    static constexpr int kPages = 4;
+    static constexpr int kPages = 4, kBattlePage = 2;
+    static constexpr int kRowGap = 10;
+
+    static Color dim(const Theme& t) { return mix(t.ui_text, t.ui, 110); }
+
+    // One detail row: a quiet label, the value on the right, a hairline under.
+    static void row(Framebuffer& fb, const Theme& t, int y, const std::string& label, const std::string& value) {
+        fb.draw_text(6, y, label, dim(t));
+        fb.draw_text(kScreenW - 6 - Framebuffer::text_width(value), y, value, t.ui_text);
+        fb.fill_rect(4, y + 7, kScreenW - 8, 1, mix(t.ui, t.ui_text, 22));
+    }
+
+    std::string since(uint64_t then) const {
+        uint64_t now = game_.now();
+        return format_duration(now > then ? now - then : 0);
+    }
+
+    // Earliest any evolution branch could happen (UINT64_MAX: none).
+    uint64_t next_form_due() const {
+        uint64_t due = UINT64_MAX;
+        for (const EvolveRule& r : game_.species().evolve)
+            due = std::min(due, game_.pet().stage_ms + uint64_t(r.after_seconds) * 1000);
+        return due;
+    }
+
+    // Name, form, level, both meters, the four battle stats and any needs.
+    void draw_overview(Framebuffer& fb, const Theme& t) const {
+        const Pack& pack = game_.pack();
+        const Species& s = game_.species();
+        const Pet& pet = game_.pet();
+        bool egg = s.stage == Stage::Egg;
+
+        // Portrait window with a sky-and-grass backdrop.
+        int px = 4, py = 15;
+        fb.panel(px, py, 36, 36, t.bg_top, mix(t.ui, t.accent, 120));
+        fb.fill_rect(px + 1, py + 1, 34, 12, mix(t.bg_top, rgb(0xff, 0xff, 0xff), 70));
+        fb.fill_rect(px + 1, py + 27, 34, 8, t.bg_bottom);
+        fb.fill_rect(px + 1, py + 27, 34, 1, mix(t.bg_bottom, rgb(0xff, 0xff, 0xff), 60));
+        fb.draw_sprite(s.sprite, 0, px + 2, py + 2, 2);
+
+        const int tx = 45;
+        fb.draw_text(tx, 17, s.name, t.accent);
+        if (pet.forever) fb.draw_sprite(icons().forever, 0, tx + Framebuffer::text_width(s.name) + 3, 17);
+        fb.draw_text(tx, 26, stage_label(s.stage), dim(t));
+
+        if (egg) {
+            uint64_t due = next_form_due(), now = game_.now();
+            row(fb, t, 58, "HATCHES IN", due == UINT64_MAX ? "-" : due > now ? format_duration(due - now) : "SOON");
+            row(fb, t, 58 + kRowGap, "AGE", since(pet.born_ms));
+            return;
+        }
+
+        std::string xp = std::to_string(pet.xp) + "/" + std::to_string(xp_to_next(pet.level));
+        fb.draw_text(tx, 36, "LV " + std::to_string(pet.level), t.ui_text);
+        fb.draw_text(kScreenW - 5 - Framebuffer::text_width(xp), 36, xp, dim(t));
+        draw_bar(fb, tx, 44, kScreenW - 5 - tx, 3, int(pet.xp), int(xp_to_next(pet.level)), t.accent,
+                 mix(t.ui, t.ui_text, 30));
+
+        // Meters, hearts right-aligned.
+        int hearts = max_hearts(pack, pet), hx = kScreenW - 5 - hearts_width(hearts);
+        fb.draw_text(6, 56, "HUNGER", dim(t));
+        draw_hearts(fb, hx, 55, pet.hunger, hearts);
+        fb.draw_text(6, 66, "STRENGTH", dim(t));
+        draw_hearts(fb, hx, 65, pet.strength * 2, hearts);
+
+        // Four stat tiles.
+        Stats st = pet_stats(pack, pet);
+        const std::pair<const char*, int> tiles[] = {{"HP", st.hp}, {"ATK", st.atk}, {"DEF", st.def}, {"SPD", st.spd}};
+        for (int i = 0; i < 4; ++i) {
+            int x = 4 + i * 28, y = 75;
+            std::string v = std::to_string(tiles[i].second);
+            fb.panel(x, y, 26, 19, mix(t.ui, t.ui_text, 16), mix(t.ui, t.ui_text, 34));
+            fb.draw_text(x + (26 - Framebuffer::text_width(tiles[i].first)) / 2, y + 3, tiles[i].first, dim(t));
+            fb.draw_text(x + (26 - Framebuffer::text_width(v)) / 2, y + 11, v, t.ui_text);
+        }
+
+        // Condition tags, or ALL GOOD when nothing needs doing.
+        std::vector<std::pair<std::string, Color>> tags;
+        if (pet.sick) tags.push_back({"SICK", rgb(0xe0, 0x40, 0x50)});
+        if (pet.asleep) tags.push_back({"ASLEEP", rgb(0x6c, 0xb4, 0xff)});
+        if (pet.poop) tags.push_back({"POOP " + std::to_string(pet.poop), rgb(0xb8, 0x86, 0x5b)});
+        if (pet.needs_attention()) tags.push_back({"CALLING", t.accent});
+        if (tags.empty()) tags.push_back({"ALL GOOD", rgb(0x38, 0xb7, 0x64)});
+        int x = 4;
+        for (const auto& [text, c] : tags) {
+            int w = Framebuffer::text_width(text) + 6;
+            if (x + w > kScreenW - 4) break;
+            fb.panel(x, 97, w, 9, mix(t.ui, c, 60), c);
+            fb.draw_text(x + 3, 99, text, c);
+            x += w + 3;
+        }
+    }
+
+    void draw_life(Framebuffer& fb, const Theme& t) const {
+        const Species& s = game_.species();
+        const Pet& pet = game_.pet();
+        uint64_t now = game_.now();
+        int y = 17;
+        auto next = [&](const std::string& label, const std::string& value) {
+            row(fb, t, y, label, value);
+            y += kRowGap;
+        };
+        next("AGE", since(pet.born_ms));
+        next("IN THIS FORM", since(pet.stage_ms));
+        if (!s.evolve.empty()) {  // past the earliest time, it is waiting on conditions
+            uint64_t due = next_form_due();
+            next("NEXT FORM", due > now ? format_duration(due - now) : "NEEDS MORE");
+        }
+        std::optional<uint64_t> life = lifespan_left_ms(game_.pack(), pet, now);
+        if (pet.forever) next("LIFESPAN", "FOREVER");
+        else if (life) next("LIFESPAN", format_duration(*life));
+        next("WEIGHT", std::to_string(pet.weight) + "G");
+        next("MISTAKES", std::to_string(pet.care_mistakes) + " (" + std::to_string(pet.stage_mistakes) + " NOW)");
+        next("TRAINED", std::to_string(pet.trainings) + "X");
+        next("EFFORT", std::to_string(pet.effort));
+        if (s.stage != Stage::Egg) {
+            const Care& c = s.care;
+            char clock[16];
+            std::snprintf(clock, sizeof clock, "%02d:%02d-%02d:%02d", c.sleep_min / 60, c.sleep_min % 60,
+                          c.wake_min / 60, c.wake_min % 60);
+            next("BEDTIME", c.sleep_min == c.wake_min ? "NEVER" : clock);
+        }
+    }
+
+    void draw_battle(Framebuffer& fb, const Theme& t) const {
+        const Pack& pack = game_.pack();
+        const Pet& pet = game_.pet();
+        std::string attr = game_.species().attribute.empty() ? "-" : game_.species().attribute;
+        for (char& ch : attr) ch = char(toupper(static_cast<unsigned char>(ch)));
+        int y = 17;
+        row(fb, t, y, "LEVEL", std::to_string(pet.level));
+        row(fb, t, y += kRowGap, "XP", std::to_string(pet.xp) + "/" + std::to_string(xp_to_next(pet.level)));
+        row(fb, t, y += kRowGap, "ATTRIBUTE", attr);
+        row(fb, t, y += kRowGap, "BEST FLOOR", std::to_string(pet.run.best));
+        fb.draw_text(6, y += kRowGap + 3, "MOVES", t.accent);
+        y += 10;
+        std::vector<int> moves = equipped_moves(pack, pet);
+        if (moves.empty()) fb.draw_text(6, y, "NONE YET", dim(t));
+        for (int m : moves) {
+            const Move& mv = pack.moves[m];
+            std::string pow = "PWR " + std::to_string(mv.power);
+            fb.draw_sprite(icons().ui, move_icon(mv.game), 5, y - 2);
+            fb.draw_text(16, y, mv.name, t.ui_text);
+            fb.draw_text(kScreenW - 6 - Framebuffer::text_width(pow), y, pow, dim(t));
+            y += 11;
+        }
+    }
+
+    // Exact timers: when each need changes next and how long until an open
+    // call becomes a care mistake.
+    void draw_timers(Framebuffer& fb, const Theme& t) const {
+        const Species& s = game_.species();
+        const Pet& pet = game_.pet();
+        uint64_t now = game_.now();
+        int y = 17;
+        if (s.stage == Stage::Egg) {
+            row(fb, t, y, "CARE", "NONE YET");
+        } else {
+            const Care& c = s.care;
+            auto left = [](uint32_t total, uint32_t done) {
+                return format_duration(uint64_t(total > done ? total - done : 0) * 1000);
+            };
+            const char* paused = pet.asleep ? "PAUSED" : nullptr;
+            row(fb, t, y, "HUNGER -1/2", paused ? paused : left(std::max<uint32_t>(1, c.hunger_s / 2), pet.hunger_s));
+            row(fb, t, y += kRowGap, "STRENGTH -1", paused ? paused : left(c.strength_s, pet.strength_s));
+            row(fb, t, y += kRowGap, "NEXT POOP", paused ? paused : left(c.poop_s, pet.poop_s));
+        }
+        fb.draw_text(6, y += kRowGap + 3, "CALLS", t.accent);
+        y += 10;
+        bool any = false;
+        auto call = [&](const char* name, const Call& cl) {
+            if (!cl.active()) return;
+            uint64_t deadline = cl.since_ms + uint64_t(kCallTimeoutS) * 1000;
+            row(fb, t, y, name, deadline > now ? "MISS IN " + format_duration(deadline - now) : "NOW");
+            y += kRowGap;
+            any = true;
+        };
+        call("HUNGER", pet.hunger_call);
+        call("STRENGTH", pet.strength_call);
+        call("LIGHTS", pet.lights_call);
+        if (!any) fb.draw_text(6, y, "NONE", dim(t));
+    }
+
     int page_ = 0;
 };
 
