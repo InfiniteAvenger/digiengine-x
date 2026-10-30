@@ -211,7 +211,7 @@ kbbbbbbk
 ..kkkk..
 )";
 
-// Quest path cards, 9x9 icons drawn with draw_icon: fight, rest, forage, boss, home.
+// Map nodes, 9x9: fight (the same sword as the quest menu), rest, forage, boss, home.
 constexpr const char* kNodes = R"(size 9 9
 palette
 w f4f4f4
@@ -229,15 +229,15 @@ n 8b5a2b
 l b8865b
 d 5d3a1f
 frame
-w.......w
-.w.....w.
-..w...w..
-...w.w...
-....g....
-...w.w...
-.yy...yy.
-.yn...ny.
-n.......n
+.......wg
+......wwg
+.....wwg.
+....wwg..
+.y.wwg...
+..ywg....
+..ny.....
+.n..y....
+y........
 frame
 ....o....
 ...oo....
