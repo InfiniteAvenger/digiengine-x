@@ -225,49 +225,54 @@ void Shell::build(int w, int h, const ShellStyle& style) {
     const float W = float(w_), H = float(h_), M = std::min(W, H);
 
     // ---- Layout. Sizes are fractions of the screen's side S. ----------------
-    // The screen is as big as the window allows, in a thin faceplate border
-    // with the buttons close beside it. Tall windows add the logo above and a
-    // speaker grille below; wide ones (landscape) are just the faceplate and
-    // buttons, centered, with a shorter keyhole tail.
+    // The screen is as big as the window allows, in a thin faceplate border.
+    // Tall windows put the buttons close beside it, the logo above and a
+    // speaker grille below. Wide ones (landscape, held in two hands) put the
+    // screen at the left edge and the buttons at the right edge under the
+    // right thumb, with the logo, grille and light between them.
     const bool wide = W > H;
-    constexpr float kPad = 0.045f, kGap = 0.035f;
-    constexpr float kBtnR = 0.09f, kCollar = 1.25f, kBtnStep = 0.3f;
+    constexpr float kPad = 0.045f, kGap = 0.035f, kCollar = 1.25f, kBtnStep = 0.3f;
     constexpr float kBlockH = 0.2f, kLogoGap = 0.1f, kGrilleGap = 0.13f, kGrilleH = 0.17f;
+    constexpr float kEdge = 0.05f, kMiddleMin = 0.35f;  // landscape: margin at each side, least middle
+    const float kBtnR = wide ? 0.1f : 0.09f;
     const float kTail = wide ? 0.08f : 0.2f;
     const float rim = 0.022f * M;  // the molded lip around the front
-    const float content_w = 1 + 2 * kPad + kGap + 2 * kCollar * kBtnR;
+    const float content_w = 1 + 2 * kPad + 2 * kCollar * kBtnR + (wide ? kMiddleMin + 2 * kEdge : kGap);
     const float main_h = 1 + 2 * kPad + kTail;
     const float content_h = main_h + (wide ? 0 : kBlockH + kLogoGap + kGrilleGap + kGrilleH);
     const float S = std::floor(std::min((0.97f * W - 2 * rim) / content_w, (0.96f * H - 2 * rim) / content_h));
 
     const float half = S / 2 + kPad * S;  // the faceplate's square part
-    const float left = (W - content_w * S) / 2;
-    const float cx = left + half;
+    button_r_ = kBtnR * S;
+    const float cx = wide ? rim + kEdge * S + half : (W - content_w * S) / 2 + half;
+    const float bx = wide ? W - rim - kEdge * S - kCollar * button_r_ : cx + half + kGap * S + kCollar * button_r_;
     // Sit a little above the middle on tall phones, like a face.
     const float top = wide ? (H - content_h * S) / 2 : (H - content_h * S) * 0.44f;
     const float cy = top + (wide ? 0 : (kBlockH + kLogoGap) * S) + half;
+    // Landscape's middle, between the faceplate and the buttons.
+    const float mid_x0 = cx + half, mid_x1 = bx - kCollar * button_r_;
+    const float mid_cx = (mid_x0 + mid_x1) / 2, mid_w = mid_x1 - mid_x0;
+    const bool decor = !wide || mid_w > 0.5f * S;  // room for the logo and grille
     screen_size_ = int(S);
     screen_x_ = int(std::lround(cx - S / 2));
     screen_y_ = int(std::lround(cy - S / 2));
 
-    button_r_ = kBtnR * S;
-    const float bx = cx + half + kGap * S + kCollar * button_r_;
     for (int i = 0; i < 3; ++i) {
         button_cx_[i] = int(std::lround(bx));
         button_cy_[i] = int(std::lround(cy + float(i - 1) * kBtnStep * S));
     }
 
     // The logo: "DIGIENGINE" and a taller X in the buttons' color, over a
-    // tagline, centered above the faceplate (tall windows only).
+    // tagline. Above the faceplate, or in landscape's middle.
     CellGrid letters = letter_grid("DIGIENGINE"), ex = letter_grid("X");
     constexpr float kBigX = 1.35f;
     const float logo_units = float(letters.cols) + 2 + float(ex.cols) * kBigX;
-    const float logo_u = 2 * half * 0.92f / logo_units;
-    const std::string tagline = wide ? "" : "VIRTUAL PET";
+    const float logo_u = (wide ? std::min(0.82f * mid_w, 2 * half * 0.92f) : 2 * half * 0.92f) / logo_units;
+    const std::string tagline = decor ? "VIRTUAL PET" : "";
     const float tag_scale = 0.42f, tag_adv = 5.0f;
-    const float logo_cx = cx;
+    const float logo_cx = wide ? mid_cx : cx;
     const float block_h = (7 + 2.4f + 5 * tag_scale) * logo_u;  // letters, gap, tagline
-    const float logo_top = wide ? -H : top + (kBlockH * S - block_h) / 2;  // off screen when wide
+    const float logo_top = !decor ? -H : wide ? cy - 0.14f * S - block_h / 2 : top + (kBlockH * S - block_h) / 2;
     const float logo_x0 = logo_cx - logo_units * logo_u / 2;
     letters.x0 = logo_x0;
     letters.y0 = logo_top;
@@ -279,14 +284,14 @@ void Shell::build(int w, int h, const ShellStyle& style) {
     const float tag_w = (float(tagline.size()) * tag_adv - 2) * tag_u;
     const float tag_x0 = logo_cx - tag_w / 2, tag_y0 = logo_top + (7 + 2.4f) * logo_u;
 
-    // The keyhole tail under the faceplate, and the grille below it (tall
-    // windows only).
+    // The keyhole tail under the faceplate, and the grille below it (or
+    // under the logo in landscape's middle).
     const float tail_he = kTail * S / 2 + 0.03f * S;
     const float tail_cy = cy + half + kTail * S / 2 - 0.03f * S;
     const float tail_detail_y = cy + half + kTail * S * 0.42f;  // screws and holes
     const float hole_r = 0.019f * S, hole_step = 0.06f * S;
-    const float grille_cx = wide ? -W : cx;  // off screen when wide
-    const float grille_cy = tail_cy + tail_he + (kGrilleGap + kGrilleH / 2) * S;
+    const float grille_cx = !decor ? -W : wide ? mid_cx : cx;  // off screen without room
+    const float grille_cy = wide ? cy + 0.3f * S : tail_cy + tail_he + (kGrilleGap + kGrilleH / 2) * S;
     // The power light, above the A button.
     const float led_r = 0.02f * S;
     const float led_x = bx, led_y = cy - half + 0.03f * S;

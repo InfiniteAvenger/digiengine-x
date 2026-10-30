@@ -1188,9 +1188,9 @@ int main(int argc, char* argv[]) {
           "level, run, inventory and garden survive a reload");
     run(500);
     shot("21_home_day");
-    // The Android handheld frame, on a portrait and a landscape phone (half
-    // a 1080x2340 screen), with B held down.
-    for (auto [w, h, name] : {std::tuple{540, 1170, "21b_shell_portrait"}, std::tuple{1170, 540, "21c_shell_landscape"}}) {
+    // The Android handheld frame at half size on a portrait phone (1080x2340)
+    // and a Pixel 10 Pro held landscape (2856x1280), with B held down.
+    for (auto [w, h, name] : {std::tuple{540, 1170, "21b_shell_portrait"}, std::tuple{1428, 640, "21c_shell_landscape"}}) {
         vpet::Shell shell;
         shell.build(w, h, vpet::ShellStyle{});
         write_bmp32(out + "/" + name + ".bmp", shell.compose(p.last, vpet::BTN_B), w, h);
